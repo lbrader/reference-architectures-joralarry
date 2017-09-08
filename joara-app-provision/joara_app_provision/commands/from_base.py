@@ -7,7 +7,6 @@ import os
 
 
 def provision_images(module, images,  args):
-
     joara_app_main = find_joara_app_main()
     run_file = os.path.join(joara_app_main, module)
     context = Context(file=run_file, task=args.task, evars=args.evars, datacenter=args.datacenter)
@@ -19,6 +18,15 @@ def provision_images(module, images,  args):
             context.invoke()
 
 
+
+def sync_version(run_file, args):
+    context = Context(file=run_file, task=args.task, evars=args.evars, datacenter=args.datacenter)
+
+    context.copy_project()
+    if args.retry:
+        context.invoke_with_retry()
+    else:
+        context.invoke()
 
 def provision(args):
     joara_app_main = find_joara_app_main()

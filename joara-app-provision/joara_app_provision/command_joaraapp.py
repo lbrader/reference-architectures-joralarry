@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, print_function, division
 from .commands.bootstrap_command import bootstrap_add_subcommand, bootstrap_subcommand
+from .commands.sync_command import sync_image_add_subcommand, sync_subcommand
 from .commands.configure_command import configure_add_subcommand, configure_subcommand
 from .commands.image_command import image_add_subcommand, image_subcommand
 from .commands.destroy_command import destroy_add_subcommand, destroy_subcommand
@@ -27,6 +28,7 @@ def main():
 
     configure_add_subcommand(subparsers)
     bootstrap_add_subcommand(subparsers)
+    sync_image_add_subcommand(subparsers)
     image_add_subcommand(subparsers)
     destroy_add_subcommand(subparsers)
     args = parser.parse_args()
@@ -43,5 +45,7 @@ def main():
         destroy_subcommand(args)
     elif args.cmd == 'configure':
         configure_subcommand(args)
+    elif args.cmd == 'syncimage':
+        sync_subcommand(args)
     else:
         raise RuntimeError('Unknown subcommand {}'.format(args.cmd))

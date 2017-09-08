@@ -16,9 +16,7 @@ import json
 from colorama import Fore, Back, Style, init
 from azure.mgmt.storage import StorageManagementClient
 from azure.common.credentials import ServicePrincipalCredentials
-from multiprocessing import Process, Manager
-init(autoreset=True, strip=False, convert=False)
-
+import git
 
 class Image(object):
     def __init__(self, **kwargs):
@@ -35,7 +33,7 @@ class Image(object):
             self.attributes['dockerfile'] = "Dockerfile"
 
 
-        self.attributes['commit'] = "1" #run("git rev-parse HEAD").stdout.strip()
+
         self.attributes['joara_app_main'] = self.attributes['cluster_config']['JOARA_APP_MAIN']
         self.attributes['user'] = self.attributes['cluster_config']['JOARA_APP_DOCKER_USER']
         self.joara_app_main = self.attributes['joara_app_main']
@@ -44,6 +42,7 @@ class Image(object):
         self.docker_registry = self.attributes['cluster_config']['JOARA_APP_DOCKER_REGISTRY']
         self.resource_group_prefix = self.attributes['cluster_config']['RESOURCE_GROUP_PREFIX']
         self.datacenter = self.attributes['datacenter']
+        self.attributes['commit'] = self._get_git_commit()
 
         try:
             if ( 'AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ) :
@@ -117,23 +116,9 @@ class Image(object):
         run("docker build --file {dockerfile} --tag {fqdi} .".format(**
                                                                      self.attributes), echo=True)
         imagedic = {}
-        try:
-            with open('Dockerfile', 'r') as f:
-                for line in f:
-                    if line.startswith('FROM'):
-                        fqdi = line.split()[-1]
-                        xs = fqdi.split(':')
-                        xs = list(flatmap(lambda ys: ys.split('/'), xs))
-                        tag = xs.pop()
-                        image = xs.pop()
-                        imagedic['depends_on_image'] = image
-                        imagedic['base_image_fqdi'] = fqdi
-                        break
-        except:
-            pass
         imagedic['image'] = self.attributes['image']
         imagedic['version'] = self.attributes['version']
-        imagedic['branch'] = 'test' #self._get_git_branch()
+        imagedic['branch'] = self._get_git_branch()
         imagedic['commit'] = '{}'.format(self.attributes['commit'])
         imagedic['environment'] = self.attributes['cluster_config']['JOARA_APP_DATACENTER']
         imagedic['build_hostname'] = socket.gethostname()
@@ -156,82 +141,16 @@ class Image(object):
 
         currentimagedic = self.version_manager.get_latest_image_dict(datacenter=self.datacenter)
 
-        currentimagedic['depends_on_image'] = localimagedic['depends_on_image']
-        currentimagedic['base_image_fqdi'] = localimagedic['base_image_fqdi']
         currentimagedic['image'] = self.attributes['image']
         currentimagedic['version'] = localimagedic['version']
         currentimagedic['branch'] = localimagedic['branch']
-        currentimagedic['comment'] = ''
-
+        currentimagedic['commit'] = localimagedic['commit']
+        currentimagedic['environment'] = self.attributes['cluster_config']['JOARA_APP_DATACENTER']
         currentimagedic['build_hostname'] = localimagedic['build_hostname']
         currentimagedic['build_ip_address'] = localimagedic['build_ip_address']
 
         self.version_manager.update_images_yaml(datacenter=self.datacenter, **currentimagedic)
 
-        # out = "squash, " if self.attributes.get('flatten', False) else ""
-        # out = out + "push and sync completed for image: {}".format(self.attributes['fqdi'])
-        # print(Fore.GREEN + out)
-
-    def copyimage(self):
-        # procs = 3
-        list_image = self.copyimages.split('#')
-        # Create a list of jobs and then iterate through
-        # the number of processes appending each process to
-        # the job list
-        manager = Manager()
-        return_dict = manager.dict()
-        jobs = []
-        if self.datacenter != self.from_datacenter:
-            # for i in range(0, procs):
-            for image_name in list_image:
-                current_dc_image_dic = self.version_manager.get_latest_image_sync_dict(image_name,
-                                                                                       datacenter=self.datacenter)
-
-                from_datacenter= 'dev' if 'test' == self.datacenter else 'test' if 'prod' == self.datacenter else None
-
-                if from_datacenter:
-                    image_dic = self.version_manager.get_latest_image_sync_dict(image_name,
-                                                                                datacenter=from_datacenter)
-                    name = image_dic['image']
-                    from_registry = image_dic['registry']
-                    from_user = image_dic['user']
-                    tag = image_dic['version']
-                    user = self.attributes['user']
-                    move = image_dic['move']
-                    if 'not exist' not in tag and (from_registry != self.registry or user != from_user):
-                        if current_dc_image_dic['version'] != image_dic['version']:
-
-                            process = Process(target=self.syncdocker,
-                                              args=(from_registry, from_user, name, tag, return_dict))
-                            jobs.append(process)
-                        else:
-                            self.log("image {} version are already in sync".format(image_name), fg='yellow')
-
-        if len(jobs) == 0:
-            self.log("No images exist to copy from datcenter: {} to  datacenter: {}".format(self.from_datacenter,self.datacenter), fg='blue')
-
-        else:
-
-            self.log("Total no. of images to copy from datcenter: {} to  datacenter: {} is {} ".format(self.from_datacenter,self.datacenter,len(jobs)), fg='blue')
-            for j in jobs:
-                j.start()
-
-            # Ensure all of the processes have finished
-            for j in jobs:
-                j.join()
-
-            if len(return_dict.values()) == len(jobs):
-
-                self.log("Successfully copied images from datcenter: {} to  datacenter: {}".format(
-                    self.from_datacenter,
-                    self.datacenter), fg='green')
-                self.log("Overall status: {}".format(str(return_dict)), fg='blue')
-
-            else:
-                self.log("ERROR: All images at not copied from datcenter: {} to  datacenter: {}, please refer error messages".format(
-                          self.from_datacenter,
-                          self.datacenter), fg='red')
-                self.log("Overall status: {}".format(str(return_dict)).format(str(return_dict)), fg='red')
 
 
     def _get_ip_address(self):
@@ -253,6 +172,16 @@ class Image(object):
         if log:
             self.log(cmd, fg=fg)
         getoutput(cmd)
+
+    def _get_git_commit(self):
+        git_dir = os.path.join(self.joara_app_main)
+        repo = Repo(git_dir)
+        try:
+            commitid = repo.head.reference.commit.hexsha
+            commit = commitid
+        except:
+            commit = 'Not found'
+        return commit
 
     def _get_git_branch(self):
         git_dir = os.path.join(self.joara_app_main)

@@ -234,7 +234,7 @@ class Context(object):
         }
 
         if 'sshkey' in str(parameters):
-            pub_ssh_key_path = os.path.expanduser('/root/.ssh/id_rsa.pub')
+            pub_ssh_key_path = os.path.expanduser('{user}/.ssh/id_rsa.pub'.format(user=os.path.expanduser("~")))
             with open(pub_ssh_key_path, 'r') as pub_ssh_file_fd:
                 sshkey = pub_ssh_file_fd.read()
                 attributes.update({

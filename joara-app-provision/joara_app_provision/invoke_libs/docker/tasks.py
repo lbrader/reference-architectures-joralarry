@@ -14,9 +14,16 @@ def build(ctx, datacenter):
 @task
 @with_context(Hook)
 def push(ctx, datacenter):
-    if datacenter != 'vagrant':
+    if datacenter != 'local':
         image = Image(**ctx.attributes)
         image.push()
+
+@task
+@with_context(Hook)
+def copy(ctx, datacenter):
+    if datacenter != 'local':
+        image = Image(**ctx.attributes)
+        image.copy()
 
 @task
 @with_context(Hook)

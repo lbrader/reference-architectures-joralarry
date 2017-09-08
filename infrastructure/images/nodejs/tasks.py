@@ -13,6 +13,7 @@ def post(self, attrs):
 
     })
     attrs['flatten'] = False
+    attrs['move'] = True
     return attrs
 
 tasks.Hook.post = post

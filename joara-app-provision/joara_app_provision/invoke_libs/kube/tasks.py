@@ -8,13 +8,14 @@ from ..decorator import with_context, Hook
 @task
 @with_context(Hook)
 def build(ctx, datacenter):
-    image = Image(**ctx.attributes)
-    image.build()
+    if datacenter == 'dev':
+        image = Image(**ctx.attributes)
+        image.build()
 
 @task
 @with_context(Hook)
 def push(ctx, datacenter):
-    if datacenter != 'jenkins':
+    if datacenter == 'dev':
         image = Image(**ctx.attributes)
         image.push()
 
@@ -36,6 +37,12 @@ def scale(ctx, datacenter):
 def patch(ctx, datacenter):
     kube = KubeApi(datacenter=datacenter, **ctx.attributes)
     kube.patch()
+
+@task
+@with_context(Hook)
+def get(ctx, datacenter):
+    kube = KubeApi(datacenter=datacenter, **ctx.attributes)
+    kube.get()
 
 @task
 @with_context(Hook)

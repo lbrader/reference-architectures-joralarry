@@ -3,15 +3,19 @@ from distutils.util import strtobool
 import yaml
 from shutil import copyfile
 from invoke import run
-
+from ..python_libs.colors import bold
 from colorama import Fore, Back, Style, init
+import sys
 
-init(autoreset=True, strip=False, convert=False)
+
 
 
 class VersionManager(object):
     def __init__(self, **kwargs):
         self.__dict__ = kwargs
+
+    def log(self, msg, fg='yellow'):
+        sys.stderr.write(bold(msg + '\n', fg=fg))
 
     def get_latest_image_dict(self, datacenter='local'):
         ifolderpath = os.path.join(self.joara_app_main, 'infrastructure', 'images_version')
@@ -22,16 +26,18 @@ class VersionManager(object):
                     ifolderpath, datacenter=self.datacenter)
                 run(cmd, echo=True)
         except:
+            self.log("ERROR: Requested image: {} details are not exist in storage image inventory".format(
+                self.attributes['image'], datacenter), fg='red')
             pass
 
         with open(fnamelatest) as f:
             imagedict = yaml.load(f)
 
         if self.attributes['deploy'] == True and self.attributes['image'] not in imagedict:
-            raise RuntimeError(
-                Fore.RED + "ERROR: Requested image: {} details are not exist in image inventory \n "
-                           "please add the image details to all images_{}.yml file under provisioning/images_version".format(
-                    self.attributes['image'], datacenter))
+            raise RuntimeError(self.log( "ERROR: Requested image: {} details are not exist in image inventory \n "
+                "please add the image details to all images_{}.yml file under provisioning/images_version".format(
+                    self.attributes['image'], datacenter), fg='red')
+               )
 
         if imagedict and self.attributes['image'] in imagedict:
             imagedict = imagedict[self.attributes['image']]
@@ -39,23 +45,15 @@ class VersionManager(object):
         else:
             dic = {}
             dicitem = {}
-            dicitem["base_image_fqdi"] = "{{ base_image_fqdi }}"
             dicitem["branch"] = "{{ branch }}"
             dicitem["build_hostname"] = "{{ build_hostname }}"
             dicitem["build_ip_address"] = "{{ build_ip_address }}"
-            dicitem["comment"] = ""
             dicitem["commit"] = "{{ commit }}"
-            dicitem["depends_on_image"] = "{{ depends_on_image }}"
             dicitem["environment"] = "{{ environment }}"
             dicitem["image"] = self.attributes['image']
-            dicitem["move"] = False if 'move' not in self.attributes else  self.attributes['move']
-            dicitem["pull_master_latest"] = False
             dicitem["registry"] = self.attributes['cluster_config']['JOARA_APP_DOCKER_REGISTRY']
-            dicitem["use_latest"] = self.attributes['use_latest'] if 'use_latest' in self.attributes else False
             dicitem["user"] = self.attributes['user']
             dicitem["version"] = "{{ version }}"
-            dicitem['container_category'] = self.attributes[
-                'container_category'] if 'container_category' in self.attributes else "none"
             dic[self.attributes['image']] = dict()
             dic[self.attributes['image']].update(dicitem)
             with   open(fnamelatest, 'a') as f:
@@ -98,6 +96,7 @@ class VersionManager(object):
             run(cmd, echo=True)
 
     def get_images_list(self, datacenter='local'):
+        print(datacenter)
         ifolderpath = os.path.join(self.joara_app_main, 'infrastructure', 'images_version')
         fnamelatest = os.path.join(ifolderpath, 'images_{}.yml'.format(datacenter))
         with open(fnamelatest) as f:
@@ -109,10 +108,28 @@ class VersionManager(object):
         ifolderpath = os.path.join(self.joara_app_main, 'infrastructure', 'images_version')
         self.fnamelatest = os.path.join(ifolderpath, 'images_{}.yml'.format(datacenter))
         with open(self.fnamelatest) as f:
-            dict = yaml.load(f)
+            imagedict = yaml.load(f)
         try:
-            dict = dict[image]
-        except:
-            print(Fore.RED + 'ERROR: Image {} not exist'.format(image))
+            if imagedict and image in imagedict:
+                imgdic = imagedict[image]
+                return imgdic
+            else:
+                dic = {}
+                dicitem = {}
+                dicitem["branch"] = "{{ branch }}"
+                dicitem["build_hostname"] = "{{ build_hostname }}"
+                dicitem["build_ip_address"] = "{{ build_ip_address }}"
+                dicitem["commit"] = "{{ commit }}"
+                dicitem["environment"] = "{{ environment }}"
+                dicitem["image"] = self.attributes['image']
+                dicitem["registry"] = self.attributes['cluster_config']['JOARA_APP_DOCKER_REGISTRY']
+                dicitem["user"] = self.attributes['user']
+                dicitem["version"] = "{{ version }}"
+                dic[image] = dict()
+                dic[image].update(dicitem)
+                with   open(self.fnamelatest, 'a') as f:
+                    yaml.dump(dic, f, default_flow_style=False)
+                return dicitem
+        except Exception as err:
+            self.log('ERROR: Image {} not exist, Exception: {}'.format(image,err), fg='red')
             return {}
-        return dict

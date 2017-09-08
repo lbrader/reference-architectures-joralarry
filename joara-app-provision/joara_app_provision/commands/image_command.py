@@ -16,10 +16,10 @@ def image_add_subcommand(parser):
             'build',
             'push',
             'deploy',
-            'copy',
             'scale',
             'patch',
             'delete',
+            'get'
         ],
         help="Which action to be performed on the image "
     )
