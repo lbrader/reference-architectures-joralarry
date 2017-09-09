@@ -11,6 +11,7 @@ setup(
         'joara_app_provision.commands',
         'joara_app_provision.env',
         'joara_app_provision.python_libs',
+        'joara_app_provision.log',
         'joara_app_provision.invoke_libs',
     ],
     entry_points={
@@ -36,8 +37,8 @@ setup(
         'jinja2',
         'kubernetes',
         'websocket-client===0.40.0',
-        'paramiko',
-        'zipfile'
+        'paramiko'
+
 
     ]
 )

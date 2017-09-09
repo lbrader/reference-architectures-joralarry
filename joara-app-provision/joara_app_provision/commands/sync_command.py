@@ -24,20 +24,10 @@ def sync_image_add_subcommand(parser):
         type=str,
         required=True,
         choices=[
-            'copy',
-            'copyimage',
-            'imgdiff'
+            'copy'
         ],
         help="Which action to perform, use copy to copy images from one datacenter to another"
 
-    )
-
-    subcommand.add_argument(
-        '--images',
-        required=False,
-        nargs="+",
-        type=str,
-        help="Which images to copy "
     )
 
     subcommand.add_argument(
@@ -49,19 +39,7 @@ def sync_image_add_subcommand(parser):
         ]
     )
 
-    subcommand.add_argument(
-        "-e", "--evars",
-        type=str,
-        required=False,
-        help=""
-    )
-    subcommand.add_argument(
-        "-r", "--retry",
-        required=False,
-        action="store_true",
-        help=""
-    )
-
+    subcommand.add_argument('--verbose', required=False, action='count', default=True)
     return subcommand
 
 
@@ -76,14 +54,4 @@ def sync_subcommand(args):
 
     joara_app_main = find_joara_app_main()
     run_file = os.path.join(joara_app_main, 'infrastructure', 'sync', 'run')
-
-    if 'image' == args.group:
-        if args.evars is None and args.cmd == 'syncimage' and ( args.task == 'copy' ) and not args.images:
-            args.evars = "source={}".format(args.source)
-        if args.evars is None and args.cmd == 'syncimage' and args.task == 'copyimage':
-            if args.images:
-                args.evars = "'source={},images={}'".format(args.source, "#".join(args.images))
-            else:
-                raise RuntimeError("Please select list of images to copy")
-
-        from_base.sync_version(run_file,args)
+    from_base.sync_version(run_file, args)

@@ -1,13 +1,10 @@
 from multiprocessing import Process, Manager
-from docker import Client
 import yaml
 import os
 import sys
 import json
 from ...invoke_libs.version_manager import VersionManager
 import traceback
-from ...python_libs.colors import bold
-from colorama import Fore, Back, Style, init
 from azure.mgmt.storage import StorageManagementClient
 from azure.common.credentials import ServicePrincipalCredentials
 from invoke import run
@@ -17,7 +14,7 @@ import os
 from kubernetes import client, config
 from kubernetes.client import api_client
 from kubernetes.client.apis import core_v1_api
-
+from ...log import logging
 
 
 class CopyDocker(object):
@@ -26,14 +23,12 @@ class CopyDocker(object):
             'user': 'dev',
             'registry_version': 'v2'
         }
+        self.logger = logging.get_joara_logger(self.__class__.__name__)
         self.attributes.update(kwargs)
         self.attributes['user'] = self.attributes['cluster_config']['JOARA_APP_DOCKER_USER']
         self.joara_app_main = self.attributes['cluster_config']['JOARA_APP_MAIN']
         self.datacenter = self.attributes['cluster_config']['JOARA_APP_DATACENTER']
         self.from_datacenter = self.attributes["from_datacenter"]
-        self.copyimages = self.attributes["copy_images"]
-        self.base_url = "unix:/" + self.attributes['cluster_config']['DOCKER_SOCK']
-        self.client = Client(base_url=self.base_url, version='1.21')
         self.registry = self.attributes['cluster_config']['JOARA_APP_DOCKER_REGISTRY']
         self.resource_group_prefix = self.attributes['cluster_config']['RESOURCE_GROUP_PREFIX']
 
@@ -57,7 +52,7 @@ class CopyDocker(object):
                 os.environ['AZURE_SUBSCRIPTION_ID'] = self.subscription_id
         except Exception as e:
                 logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, {}".format(e)
-                self.log(logs, fg='red')
+                self.logger.error(logs)
                 raise RuntimeError(logs)
 
         if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
@@ -78,7 +73,7 @@ class CopyDocker(object):
             run("az acr login --name joaraacr{}".format(self.from_datacenter))
         else:
             logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, "
-            self.log(logs, fg='red')
+            self.logger.error(logs)
             raise RuntimeError(logs)
 
         try:
@@ -91,13 +86,11 @@ class CopyDocker(object):
             self.api = core_v1_api.CoreV1Api(self.apiclient)
             self.k8s_beta = client.ExtensionsV1beta1Api()
         except Exception as err:
-            self.log("Error copying Kube config, Exception: {}".format(err), fg='red')
+            self.logger.error()("Error copying Kube config, Exception: {}".format(err))
             sys.exit(1)
 
         self.version_manager = VersionManager(**self.__dict__)
 
-    def log(self, msg, fg='yellow'):
-        sys.stderr.write(bold(msg + '\n', fg=fg))
 
     def cd(self, directory, fg='green'):
         while True:
@@ -105,7 +98,7 @@ class CopyDocker(object):
             directory = directory.format(self)
             if prev == directory:
                 break
-        self.log('cd {}'.format(directory), fg='green')
+        self.logger.info('cd {}'.format(directory))
         os.chdir(directory)
 
     def copy(self):
@@ -137,13 +130,13 @@ class CopyDocker(object):
                         jobs.append(process)
                     else:
 
-                        self.log( "image {} version are already in sync".format(image_name),fg='yellow')
+                        self.logger.info( "image {} version are already in sync".format(image_name))
 
         if len(jobs) == 0:
-            self.log( "No images exist to copy from datcenter: {} to  datacenter: {}".format( self.from_datacenter,self.datacenter), fg='blue')
+            self.logger.info( "No images exist to copy from datcenter: {} to  datacenter: {}".format( self.from_datacenter,self.datacenter))
 
         else:
-            self.log("Total no. of images to copy from datcenter: {} to  datacenter: {} is {}".format(self.from_datacenter, self.datacenter,len(jobs)), fg='blue')
+            self.logger.info("Total no. of images to copy from datcenter: {} to  datacenter: {} is {}".format(self.from_datacenter, self.datacenter,len(jobs)))
 
             for j in jobs:
                 j.start()
@@ -154,12 +147,12 @@ class CopyDocker(object):
 
             if len(return_dict.values()) == len(jobs):
 
-                self.log("Successfully copied images from datcenter: {} to  datacenter: {}".format(self.from_datacenter,self.datacenter),fg='green')
-                self.log("Overall status: {}".format(str(return_dict)),fg='blue')
+                self.logger.info("Successfully copied images from datcenter: {} to  datacenter: {}".format(self.from_datacenter,self.datacenter))
+                self.logger.info("Overall status: {}".format(str(return_dict)))
 
             else:
-                self.log("ERROR: All images are not copied from datcenter: {} to  datacenter: {}, please refer error messages".format(self.from_datacenter,self.datacenter),fg='red')
-                self.log("Overall status: {}".format(str(return_dict)),fg='red')
+                self.logger.info("ERROR: All images are not copied from datcenter: {} to  datacenter: {}, please refer error messages".format(self.from_datacenter,self.datacenter))
+                self.logger.info("Overall status: {}".format(str(return_dict)))
 
 
     def syncdocker(self, from_registry, from_user, image, version, return_dict):
@@ -176,20 +169,20 @@ class CopyDocker(object):
             image=image,
             version=version
         )
-        self.log("pull image started for: {}".format(fqdi), fg='yellow')
+        self.logger.info("pull image started for: {}".format(fqdi))
 
         run("docker pull {fqdi}".format(fqdi=fqdi))
-        self.log( "pull image completed for: {}".format(fqdi), fg='green')
+        self.logger.info("pull image completed for: {}".format(fqdi))
 
 
         run("docker tag {fqdi} {tofqdi}".format(fqdi=fqdi, tofqdi=tofqdi))
-        self.log("tag image completed for: {}".format(tofqdi), fg='green')
+        self.logger.info("tag image completed for: {}".format(tofqdi))
 
         run("az acr login --name joaraacr{}".format(self.datacenter))
-        self.log( "push image started for: {}".format(tofqdi), fg='yellow')
+        self.logger.info("push image started for: {}".format(tofqdi))
         run("docker push {tofqdi}".format(tofqdi=tofqdi))
 
-        self.log("push image completed for: {}".format(tofqdi), fg='green')
+        self.logger.info("push image completed for: {}".format(tofqdi))
 
 
 
@@ -207,34 +200,34 @@ class CopyDocker(object):
             currentimagedic['build_ip_address'] = localimagedic['build_ip_address']
             currentimagedic['user'] = self.attributes['user']
             self.version_manager.update_images_yaml(datacenter=self.datacenter, **currentimagedic)
-            self.log("sync storage for data datacenter : {} for image: {} completed".format(self.datacenter, image), fg='green')
+            self.logger.info("sync storage for data datacenter : {} for image: {} completed".format(self.datacenter, image))
 
 
         except Exception as err:
-            self.log("ERROR: {} : image sync failure for {} ".format(err,image), fg='red')
+            self.logger.error("ERROR: {} : image sync failure for {} ".format(err,image))
 
         try:
             self.cd(self.joara_app_main)
-            self.log("Deploying image: {}".format(tofqdi), fg='blue')
+            self.logger.info("Deploying image: {}".format(tofqdi))
             resp = self.k8s_beta.list_namespaced_replica_set(namespace="default")
             count = 1
             for i in resp.items:
                 if i.metadata.name == image:
                     count = int(i.spec.replicas)
-                    self.log(
+                    self.logger.info(
                         "### Deployment: {image} already running in datacenter {datacenter} with replica {count} deployed ###".format(
-                            image=self.image, datacenter=self.datacenter, count=count), fg='blue')
+                            image=self.image, datacenter=self.datacenter, count=count))
             module = os.path.join('infrastructure', 'images', 'run')
             args = Attributes(
-                {'task': 'deploy', 'evars': "count={}".format(count), 'datacenter': self.datacenter, 'retry': ""})
+                {'task': 'deploy', "count": count, 'datacenter': self.datacenter})
             from_base.provision_images(module, [image], args)
-            self.log("Completed deploying image: {}".format(image), fg='green')
+            self.logger.info("Completed deploying image: {}".format(image))
 
         except Exception as err:
-            self.log("ERROR: {} : image deploy failure {} ".format(err,image), fg='red')
+            self.logger.error("ERROR: {} : image deploy failure {} ".format(err,image))
             sys.exit(1)
 
-        self.log('All copy and deploy steps completed for image {}'.format(image), fg='green')
+        self.logger.info('All copy and deploy steps completed for image {}'.format(image))
         return_dict[image] = 'completed'
 
 

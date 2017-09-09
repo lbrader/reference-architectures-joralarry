@@ -6,8 +6,6 @@ import os
 
 
 def destroy_add_subcommand(parser):
-
-
     subcommand = parser.add_parser('destroy')
 
     subcommand.add_argument(
@@ -34,9 +32,9 @@ def destroy_add_subcommand(parser):
         default='destroy',
         help="Which action to be performed by arm"
     )
+    subcommand.add_argument('--verbose', required=False, action='count', default=True)
     return subcommand
 
 
 def destroy_subcommand(args):
-
     from_base.destroy(args)

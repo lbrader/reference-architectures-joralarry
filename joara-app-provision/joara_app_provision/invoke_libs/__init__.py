@@ -3,7 +3,6 @@ from os import environ
 from pygments import highlight, lexers, formatters
 from json import dumps
 import sys
-from ..python_libs.colors import bold
 import zipfile
 from os import walk
 import os
@@ -32,9 +31,6 @@ class Struct:
     """
     def __init__(self, **entries):
         self.__dict__.update(entries)
-
-def log(self, msg, fg='yellow'):
-    sys.stderr.write(bold(msg + '\n', fg=fg))
 
 
 def zipfile(zipfile,folder):

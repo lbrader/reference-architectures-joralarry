@@ -3,19 +3,16 @@ from distutils.util import strtobool
 import yaml
 from shutil import copyfile
 from invoke import run
-from ..python_libs.colors import bold
-from colorama import Fore, Back, Style, init
 import sys
-
+from ..log import logging
 
 
 
 class VersionManager(object):
     def __init__(self, **kwargs):
         self.__dict__ = kwargs
+        self.logger = logging.get_joara_logger(self.__class__.__name__)
 
-    def log(self, msg, fg='yellow'):
-        sys.stderr.write(bold(msg + '\n', fg=fg))
 
     def get_latest_image_dict(self, datacenter='local'):
         ifolderpath = os.path.join(self.joara_app_main, 'infrastructure', 'images_version')
@@ -25,18 +22,18 @@ class VersionManager(object):
                 cmd = "az storage blob download --container-name imagesversion --file {}/images_{datacenter}.yml --name images_{datacenter}.yml".format(
                     ifolderpath, datacenter=self.datacenter)
                 run(cmd, echo=True)
-        except:
-            self.log("ERROR: Requested image: {} details are not exist in storage image inventory".format(
-                self.attributes['image'], datacenter), fg='red')
+        except Exception as err:
+            self.logger.error("ERROR: Requested image: {image} details are not exist in storage image inventory, {error}".format(
+                image=self.attributes['image'],error=err))
             pass
 
         with open(fnamelatest) as f:
             imagedict = yaml.load(f)
 
         if self.attributes['deploy'] == True and self.attributes['image'] not in imagedict:
-            raise RuntimeError(self.log( "ERROR: Requested image: {} details are not exist in image inventory \n "
+            raise RuntimeError(self.logger.error( "ERROR: Requested image: {} details are not exist in image inventory \n "
                 "please add the image details to all images_{}.yml file under provisioning/images_version".format(
-                    self.attributes['image'], datacenter), fg='red')
+                    self.attributes['image'], datacenter))
                )
 
         if imagedict and self.attributes['image'] in imagedict:
@@ -131,5 +128,5 @@ class VersionManager(object):
                     yaml.dump(dic, f, default_flow_style=False)
                 return dicitem
         except Exception as err:
-            self.log('ERROR: Image {} not exist, Exception: {}'.format(image,err), fg='red')
+            self.logger.error('ERROR: Image {} not exist, Exception: {}'.format(image,err))
             return {}

@@ -6,11 +6,23 @@ from .commands.configure_command import configure_add_subcommand, configure_subc
 from .commands.image_command import image_add_subcommand, image_subcommand
 from .commands.destroy_command import destroy_add_subcommand, destroy_subcommand
 import argparse
-
+import sys
+from .log.logging import configure_logging, get_joara_logger
+from .log import logging
 
 def main():
     """Main entry point into the provisioning script
     """
+    args = sys.argv[1:]
+    logging_stream = None
+    output = sys.stdout
+    configure_logging(args, logging_stream)
+    logger = get_joara_logger(__name__)
+    logger.debug('Command arguments %s', args)
+    if args and (args[0] == '--version' or args[0] == '-v'):
+       print("v1.0.0")
+       sys.exit(1)
+
 
     parser = argparse.ArgumentParser(description="Run script to provision JOARA-APP")
 
@@ -24,6 +36,7 @@ def main():
         help="Where to apply the run script"
     )
 
+
     subparsers = parser.add_subparsers(dest='cmd', help='')
 
     configure_add_subcommand(subparsers)
@@ -31,6 +44,7 @@ def main():
     sync_image_add_subcommand(subparsers)
     image_add_subcommand(subparsers)
     destroy_add_subcommand(subparsers)
+
     args = parser.parse_args()
 
     if args.datacenter is None:

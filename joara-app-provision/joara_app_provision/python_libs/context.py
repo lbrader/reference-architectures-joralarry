@@ -1,9 +1,8 @@
 from __future__ import absolute_import, print_function, division
 from functools import wraps
 from time import sleep
-from ..python_libs.colors import bold
 from ..env import get_cluster_config
-from subprocess import check_call, check_output,getoutput
+from subprocess import check_call, getoutput
 import os
 import sys
 import subprocess
@@ -15,30 +14,20 @@ from ..invoke_libs import render
 import json
 from . import remote
 import zipfile
-
-def retry(retries=10, delay=10, backoff=2):
-    def deco_retry(f):
-        @wraps(f)
-        def f_retry(*args, **kwargs):
-            mtries, mdelay = retries, delay
-            while mtries > 1:
-                try:
-                    return f(*args, **kwargs)
-                except Exception:
-                    sleep(mdelay)
-                    mtries -= 1
-                    mdelay *= backoff
-            return f(*args, **kwargs)
-
-        return f_retry  # true decorator
-
-    return deco_retry
+from ..log import logging
+from ..invoke_libs.kube import KubeApi
+import yaml
+from ..invoke_libs.image import Image
+from ..invoke_libs.sync.copy_docker import CopyDocker
+from ..invoke_libs.validators import validate_ssh_key
+import tempfile
+import shutil
 
 
 class Context(object):
     def __init__(self, **kwargs):
-
         self.__dict__ = kwargs
+        self.logger = logging.get_joara_logger(self.__class__.__name__)
         self.file = os.path.abspath(self.file)
         self.script = os.path.basename(self.file)
         self.cluster_config = get_cluster_config(self.datacenter)
@@ -54,9 +43,9 @@ class Context(object):
             "datacenter": self.datacenter
         })
 
-
         try:
-            if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
+            if (
+                                    'AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
                 self.__dict__.update({
                     'subscription_id': os.environ['AZURE_SUBSCRIPTION_ID'],
                     'client_id': os.environ['AZURE_CLIENT_ID'],
@@ -74,14 +63,15 @@ class Context(object):
                 os.environ['AZURE_TENANT_ID'] = self.tenant_id
                 os.environ['AZURE_SUBSCRIPTION_ID'] = self.subscription_id
         except Exception as e:
-                logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, {}".format(
-                    e)
-                self.log(logs, fg='red')
-                raise RuntimeError(logs)
+            logs = " Please update your azure credentials under culsters.ini or to environment variables , {}".format(e)
+            self.logger.error(logs)
+            raise RuntimeError(logs)
 
+        if 'SSH_KEY_FILE' in self.cluster_config:
+            self.__dict__.update({
+                'ssh_key_file': "{}{}".format(self.joara_app_main, self.cluster_config['SSH_KEY_FILE'])})
 
         self.__dict__.update({
-            'key_file': "{}{}".format(self.joara_app_main, self.cluster_config['KEY_FILE']),
             'resource_group_prefix': self.cluster_config['RESOURCE_GROUP_PREFIX'],
             'location': self.cluster_config['LOCATION'],
             'user': self.cluster_config['USER']})
@@ -89,9 +79,10 @@ class Context(object):
         os.environ['JOARA_APP_LATEST'] = self.cluster_config['JOARA_APP_LATEST']
         os.environ['JOARA_RESOURCE_GROUP_PREFIX'] = self.resource_group_prefix
 
-        self.log("### joara_app_datacenter: {0.joara_app_datacenter} ###".format(self), fg='blue')
+        self.logger.info("joara_app_datacenter: {0.joara_app_datacenter} ".format(self))
         self.resource_group = "{}-{}".format(self.resource_group_prefix, self.datacenter)
 
+        validate_ssh_key(self.ssh_key_file)
         self.credentials = ServicePrincipalCredentials(
             client_id=self.client_id,
             secret=self.client_secret,
@@ -103,7 +94,6 @@ class Context(object):
             "us-southcentral": "southcentralus",
             "us-east": "eastus"
         }
-
 
         self.client = ResourceManagementClient(self.credentials, self.subscription_id)
 
@@ -130,18 +120,10 @@ class Context(object):
             directory = directory.format(self)
             if prev == directory:
                 break
-        self.log('cd {}'.format(directory), fg='green')
+        self.logger.debug('cd {}'.format(directory))
         os.chdir(directory)
 
-    def log(self, msg, fg='yellow'):
-        sys.stderr.write(bold(msg + '\n', fg=fg))
-
-    @retry(retries=5, delay=10, backoff=2)
-    def run_with_retry(self, *args, **kwargs):
-        self.run(*args, **kwargs)
-
-
-    def getoutput(self, cmd, fg='green',log=True):
+    def getoutput(self, cmd, log=True):
         while True:
             prev = cmd
             cmd = cmd.format(self)
@@ -149,10 +131,10 @@ class Context(object):
                 break
 
         if log:
-            self.log(cmd, fg=fg)
+            self.logger.debug(cmd)
         getoutput(cmd)
 
-    def run(self, cmd, fg='green',log=True):
+    def run(self, cmd, log=True):
         while True:
             prev = cmd
             cmd = cmd.format(self)
@@ -160,42 +142,54 @@ class Context(object):
                 break
 
         if log:
-            self.log(cmd, fg=fg)
+            self.logger.debug(cmd)
         check_call(cmd, shell=True)
 
     def configure(self):
-        if self.group == "jenkins":
-            self.sshclient = remote.sshclient("joara-release-jenkins.{location}.cloudapp.azure.com".format(location=self.regionmap[self.location]), "joarajenkins")
+        try:
+            if self.group == "jenkins":
+                self.sshclient = remote.sshclient("joara-release-jenkins.{location}.cloudapp.azure.com".format(
+                    location=self.regionmap[self.location]), "joarajenkins")
 
-            zipf = zipfile.ZipFile('ansible-jenkins.zip', 'w', zipfile.ZIP_DEFLATED)
-            self.sshclient.zipdir("{}/infrastructure/configure/jenkins/ansible-jenkins".format(self.joara_app_main), zipf)
-            zipf.close()
+                self.sshclient.zip(
+                    os.path.join(self.joara_app_main, "infrastructure", "configure", "jenkins", "ansible-jenkins"),
+                    "ansible-jenkins")
 
-            self.sshclient.sendCommand("sudo rm -rf /tmp/*")
-            self.sshclient.sendCommand("ls -la /tmp/")
-            self.sshclient.copyFile("ansible-jenkins.zip")
-            self.sshclient.copyFile("{}/infrastructure/configure/jenkins/configure.sh".format(self.joara_app_main))
-            self.sshclient.sendCommand("ls -la /tmp/")
-            #self.sshclient.sendCommand("eval \"$(ps aux | grep -ie configure.sh  | awk '{print \"kill -9 \" $2}')\"")
-            self.log("### Started configuring jenkins ###", fg='blue')
-            self.sshclient.sendCommand("chmod +x /tmp/configure.sh ; cd /tmp/ ; ./configure.sh ")
+                self.sshclient.sendCommand("sudo rm -rf /tmp/*")
+                self.sshclient.sendCommand("ls -la /tmp/")
+                self.sshclient.copyFile("ansible-jenkins.zip")
+                self.sshclient.copyFile(
+                    os.path.join(self.joara_app_main, "infrastructure", "configure", "jenkins", "configure.sh"))
+                self.sshclient.sendCommand("ls -la /tmp/")
+                # self.sshclient.sendCommand("eval \"$(ps aux | grep -ie configure.sh  | awk '{print \"kill -9 \" $2}')\"")
+                self.logger.info("Started configuring jenkins ")
+                log_output = self.sshclient.sendCommand("chmod +x /tmp/configure.sh ; cd /tmp/ ; ./configure.sh ")
 
-            os.remove("ansible-jenkins.zip")
-            self.log("### Completed configuring jenkins ###", fg='blue')
+                if "Completed Configure Jenkins" in log_output:
+                    self.logger.info("Completed configuring jenkins ")
+                else:
+                    self.logger.exception("Error in jenkins configuration,Please refer logs")
+                    sys.exit(1)
 
-        if self.group == "pre-jenkins":
-            self.sshclient = remote.sshclient("joara-release-jenkins.{location}.cloudapp.azure.com".format(location=self.regionmap[self.location]), "joarajenkins")
-            self.log("### Getting Jenkins admin credentials ###", fg='blue')
-            self.sshclient.sendCommand("sudo cat /var/lib/jenkins/secrets/initialAdminPassword")
+                os.remove("ansible-jenkins.zip")
 
 
+            if self.group == "pre-jenkins":
+                self.sshclient = remote.sshclient("joara-release-jenkins.{location}.cloudapp.azure.com".format(
+                    location=self.regionmap[self.location]), "joarajenkins")
+                self.logger.info("Getting Jenkins admin credentials ")
+                self.sshclient.sendCommand("sudo cat /var/lib/jenkins/secrets/initialAdminPassword")
+                self.logger.info("Please use the above credentials for configuring jenkins ")
+        except Exception as err:
+            self.logger.error("Exception: {0}".format(err))
+            sys.exit(1)
 
     def deploy(self, config_dict):
         """Deploy the template to a resource group."""
 
         # Dict that maps keys of CloudCenter's region names to values of Azure's region names.
         # Used below to control where something is deployed
-        self.log("### Starting the deployment: {0.joara_app_datacenter} ... ###".format(self), fg='green')
+        self.logger.info("Starting the deployment: {0.joara_app_datacenter} ... ".format(self))
 
         try:
             self.client.resource_groups.create_or_update(
@@ -205,10 +199,10 @@ class Context(object):
                 }
             )
         except CloudError as err:
-            self.log("CloudError: {0}".format(err), fg='red')
+            self.logger.error("CloudError: {0}".format(err))
             sys.exit(1)
         except Exception as err:
-            self.log("Exception: {0}".format(err), fg='red')
+            self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
 
         try:
@@ -216,7 +210,7 @@ class Context(object):
             with open(template_path, 'r') as template_file_fd:
                 template = json.load(template_file_fd)
         except Exception as err:
-            self.log("Error loading the ARM Template: {0}. Check your syntax".format(err), fg='red')
+            self.logger.error("Error loading the ARM Template: {0}. Check your syntax".format(err))
             sys.exit(1)
 
         try:
@@ -224,7 +218,7 @@ class Context(object):
             with open(parameters_path, 'r') as armparams_file_fd:
                 parameters = armparams_file_fd.read()
         except Exception as err:
-            self.log("Error loading the ARM Parameters File: {0}. Check your syntax".format(err), fg='red')
+            self.logger.error("Error loading the ARM Parameters File: {0}. Check your syntax".format(err))
             sys.exit(1)
 
         attributes = {
@@ -261,51 +255,79 @@ class Context(object):
             msg = "Deployment completed. Outputs:"
             for k, v in result.properties.outputs.items():
                 msg += f"\n- {k} = {str(v['value'])}"
-            self.log(msg, fg='yellow')
+            self.logger.info(msg)
         except CloudError as err:
-            self.log("CloudError: {0}".format(err), fg='red')
+            self.logger.error("CloudError: {0}".format(err))
             sys.exit(1)
         except Exception as err:
-            self.log("Exception: {0}".format(err), fg='red')
+            self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
 
-        self.log("### Completed the deployment: {0.joara_app_datacenter} ... ###".format(self), fg='green')
+        self.logger.info("Completed the deployment: {0.joara_app_datacenter} ... ".format(self))
 
     def destroy(self):
         """Destroy the given resource group"""
-        self.log("### Deleting resource group: {0.joara_app_datacenter} ... ###".format(self), fg='green')
+        self.logger.info("Deleting resource group: {0.joara_app_datacenter} ... ".format(self))
         try:
             self.client.resource_groups.delete(self.resource_group)
         except CloudError as err:
-            self.log("CloudError: {0}".format(err), fg='red')
+            self.logger.error("CloudError: {0}".format(err))
             sys.exit(1)
         except Exception as err:
-            self.log("Exception: {0}".format(err), fg='red')
+            self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
 
-        self.log("### Completed deleting: {0.joara_app_datacenter} ... ###".format(self), fg='green')
+        self.logger.info("Completed deleting: {0.joara_app_datacenter} ... ".format(self))
 
-    @retry(retries=5, delay=10, backoff=2)
-    def invoke_with_retry(self, fg='green'):
-        self.invoke(fg)
+    def sync_action(self, config_dict, args):
+        attrs = {}
+        cluster_config = get_cluster_config(self.datacenter)
+        attrs['cluster_config'] = cluster_config
+        attrs.update(config_dict)
+        copy = CopyDocker(datancenter=self.datacenter, **attrs)
+        if args.task == "copy":
+            copy.copy()
 
-    def invoke(self, fg='green'):
-        cmd = 'GIT_DIR={0.joara_app_main}/.git invoke '
+    def image_action(self, config_dict, args):
+        attrs = {}
+        with open("conf.yml", 'r') as f:
+            conf = yaml.load(f)
+        attrs.update(conf)
+        attrs['flatten'] = False
+        attrs['move'] = True
+        attrs['task'] = args.task
+        cluster_config = get_cluster_config(self.datacenter)
+        attrs['cluster_config'] = cluster_config
+        attrs.update(config_dict)
 
-        if 'task' in self.__dict__ and self.task:
-            cmd += 'tasks.{0.task} '
+        if args.task in ["deploy", "scale", "patch", "get", "delete", "push"]:
+            kube = KubeApi(datacenter=self.datacenter, **attrs)
+        if args.task in ["build", "push", "all"]:
+            image = Image(**attrs)
+
+        if args.task == "deploy":
+            kube.deploy()
+        elif args.task == "scale":
+            kube.scale()
+        elif args.task == "patch":
+            kube.patch()
+        elif args.task == "get":
+            kube.get()
+        elif args.task == "delete":
+            kube.delete()
+        elif args.task == "build":
+            image.build()
+        elif args.task == "push":
+            image.push()
+        elif args.task == "all":
+            image.build()
+            image.push()
+            kube.deploy()
         else:
-            cmd += 'tasks.all '
-
-        cmd += '--datacenter={} '.format(self.datacenter)
-
-        if 'evars' in self.__dict__ and self.evars:
-            cmd += "--extra-vars {0.evars} "
-
-        self.run(cmd)
+            self.logger.error("No task exist")
 
     def _app_project_path(self):
-        xs = self.project_path.split('/')
+        xs = self.project_path.split(os.sep)
         self.app_project_path = ''
         include = False
         for x in xs:
@@ -320,12 +342,24 @@ class Context(object):
     def cd_project(self):
         self.cd(self.app_project_path)
 
-    def copy_project(self):
-        self.cd_project()
-        self.run('cp -rL ../{0.project_name} /tmp')
-        self.cd('/tmp/{0.project_name}')
+
+    def get_temp_dir(self):
+        temp_dir = os.path.join(tempfile.gettempdir())
+        return temp_dir
 
     def copy_sub_project(self, sub_project):
-        self.cd(self.app_project_path + '/' + sub_project)
-        self.run('cp -rL ../{} /tmp'.format(sub_project))
-        self.cd('/tmp/{}'.format(sub_project))
+        self.cd(os.path.join(self.app_project_path, sub_project))
+        temp_dir = self.get_temp_dir()
+        self.copy_and_overwrite(os.path.join(self.app_project_path, sub_project), os.path.join(temp_dir, sub_project))
+        self.cd(os.path.join(temp_dir, sub_project))
+
+    def copy_project(self):
+        self.cd_project()
+        temp_dir = self.get_temp_dir()
+        self.copy_and_overwrite(os.path.join(self.app_project_path), os.path.join(temp_dir, self.project_name))
+        self.cd(os.path.join(temp_dir, self.project_name))
+
+    def copy_and_overwrite(self, from_path, to_path):
+        if os.path.exists(to_path):
+            shutil.rmtree(to_path, ignore_errors=True)
+        shutil.copytree(from_path, to_path)

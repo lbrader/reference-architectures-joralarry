@@ -1,6 +1,5 @@
 from __future__ import absolute_import, print_function
 from invoke import run
-from ..python_libs.colors import bold
 from subprocess import check_call, check_output,getoutput
 from docker import Client
 from ..invoke_libs.version_manager import VersionManager
@@ -13,10 +12,10 @@ from git import Repo
 import sys
 import socket
 import json
-from colorama import Fore, Back, Style, init
 from azure.mgmt.storage import StorageManagementClient
 from azure.common.credentials import ServicePrincipalCredentials
 import git
+from ..log import logging
 
 class Image(object):
     def __init__(self, **kwargs):
@@ -26,14 +25,14 @@ class Image(object):
             'registry_version': 'v2',
             'deploy': False
         }
+        self.logger = logging.get_joara_logger(self.__class__.__name__)
         self.attributes.update(kwargs)
         if 'dockerfile_ext' in kwargs:
             self.attributes['dockerfile'] = "Dockerfile.{}".format(kwargs['dockerfile_ext'])
         else:
             self.attributes['dockerfile'] = "Dockerfile"
 
-
-
+        self.task =self.attributes['task']
         self.attributes['joara_app_main'] = self.attributes['cluster_config']['JOARA_APP_MAIN']
         self.attributes['user'] = self.attributes['cluster_config']['JOARA_APP_DOCKER_USER']
         self.joara_app_main = self.attributes['joara_app_main']
@@ -64,7 +63,7 @@ class Image(object):
                 os.environ['AZURE_SUBSCRIPTION_ID'] = self.subscription_id
         except Exception as e:
                 logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, {}".format(e)
-                self.log(logs, fg='red')
+                self.logger.error(logs)
                 raise RuntimeError(logs)
 
         if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
@@ -84,18 +83,20 @@ class Image(object):
             run("az acr login --name joaraacr{}".format(self.datacenter))
         else:
             logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, "
-            self.log(logs, fg='red')
+            self.logger.error(logs)
             raise RuntimeError(logs)
 
-        self.attributes['version'] = self._get_next_version()
-        self.attributes['fqdi'] = "{registry}/{user}/{image}:{version}".format(
-            registry=self.attributes['cluster_config'][
-                'JOARA_APP_DOCKER_REGISTRY'],
-            user=self.attributes['user'],
-            image=self.attributes['image'],
-            version=self.attributes['version']
-        )
-        self.version_manager = VersionManager(**self.__dict__)
+        if self.task == "build" or self.task == "push" :
+            self.attributes['version'] = self._get_next_version()
+
+            self.attributes['fqdi'] = "{registry}/{user}/{image}:{version}".format(
+                registry=self.attributes['cluster_config'][
+                    'JOARA_APP_DOCKER_REGISTRY'],
+                user=self.attributes['user'],
+                image=self.attributes['image'],
+                version=self.attributes['version']
+            )
+            self.version_manager = VersionManager(**self.__dict__)
 
     def current_version(self):
         return str(self._get_version())
@@ -127,7 +128,7 @@ class Image(object):
         currentimagedic.update(imagedic)
 
         self.version_manager.update_images_yaml(**currentimagedic)
-        self.log("build image completed for: {}".format(self.attributes['fqdi']), fg='green')
+        self.logger.info("build image completed for: {}".format(self.attributes['fqdi']))
 
     def push(self):
         localimagedic = self.version_manager.get_latest_image_dict()
@@ -159,10 +160,8 @@ class Image(object):
         except:
             return 'Not found'
 
-    def log(self, msg, fg='yellow'):
-        sys.stderr.write(bold(msg + '\n', fg=fg))
 
-    def getoutput(self, cmd, fg='green', log=True):
+    def getoutput(self, cmd,  log=True):
         while True:
             prev = cmd
             cmd = cmd.format(self)
@@ -170,7 +169,7 @@ class Image(object):
                 break
 
         if log:
-            self.log(cmd, fg=fg)
+            self.logger.info(cmd)
         getoutput(cmd)
 
     def _get_git_commit(self):
@@ -200,9 +199,9 @@ class Image(object):
         else:
             return sorted([Version(v) for v in tags])[-1]
 
-    def getoutput(self, cmd, fg='green',log=True):
+    def getoutput(self, cmd, log=True):
         if log:
-            self.log(cmd, fg=fg)
+            self.logger.info(cmd)
         return getoutput(cmd)
 
     def _get_tags(self):
@@ -217,7 +216,7 @@ class Image(object):
             response=json.loads(response)
             return response
         except Exception as err:
-            self.log("Error getting image detail from repo: {0}.".format(err), fg='red')
+            self.logger.error("Error getting image detail from repo: {0}.".format(err))
             return None
         return response
 
@@ -254,13 +253,13 @@ class Image(object):
             if found:
                 return str(v)
             else:
-                if self.attributes['deploy']:
+                if (self.task == "push" or self.task == "deploy") or self.attributes['deploy']:
                     v.patch -= 1
                     return str(v)
                 else:
                     return str(v)
         except:
-            print("Is docker running on localhost:2375?")
+            self.logger.error("Is docker running on localhost:2375?")
             print_exc()
             return str(v)
 

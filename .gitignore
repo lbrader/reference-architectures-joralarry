@@ -17,3 +17,8 @@
 *.idea
 *.idea*
 *.pyc
+/logs
+/logs/*
+/keys/
+/keys/*
+/id_rsa.pub

@@ -9,9 +9,10 @@ set -xe
 sudo apt install -y python-pip unzip
 sudo pip install --upgrade ansible
 cd /tmp
-rm -rf joara
-unzip -q ansible-jenkins.zip
-cd joara/joara-main/infrastructure/configure/jenkins/ansible-jenkins/
+rm -rf ansible-jenkins
+unzip ansible-jenkins.zip -d ansible-jenkins
+cd ansible-jenkins
 env | sort
 export PATH=/home/$USER/.local/bin:$PATH
 ansible-playbook --connection=local -i hosts.ini jenkins.yml
+echo "!!!!!! Completed Configure Jenkins !!!!!!"

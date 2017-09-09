@@ -3,14 +3,15 @@ from scp import SCPClient
 import zipfile
 from os import walk
 import os
-from ..python_libs.colors import bold
 import sys
+from ..log import logging
 
 class sshclient(object):
     client = None
 
     def __init__(self, address, username):
-        self.log("### Connecting to server. ###".format(self), fg='blue')
+        self.logger = logging.get_joara_logger(self.__class__.__name__)
+        self.logger.info("### Connecting to server. ###".format(self))
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
         self.client.connect(address, username=username, key_filename='{user}/.ssh/id_rsa'.format(user=os.path.expanduser("~")))
@@ -26,9 +27,10 @@ class sshclient(object):
                         prevdata = stdout.channel.recv(1024)
                         alldata += prevdata
 
-                    print(str(alldata, "utf8"))
+                    self.logger.info(str(alldata, "utf8"))
+                    return str(alldata, "utf8")
         else:
-            self.log("### Connection not opened. ###".format(self), fg='red')
+            self.logger.info("### Connection not opened. ###".format(self))
 
     def copyFile(self,path):
         with SCPClient(self.client.get_transport()) as scp:
@@ -39,5 +41,15 @@ class sshclient(object):
             for file in files:
                 ziph.write(os.path.join(root, file))
 
-    def log(self, msg, fg='yellow'):
-        sys.stderr.write(bold(msg + '\n', fg=fg))
+    def zip(self,src, dst):
+        zf = zipfile.ZipFile("%s.zip" % (dst), "w", zipfile.ZIP_DEFLATED)
+        abs_src = os.path.abspath(src)
+        for dirname, subdirs, files in os.walk(src):
+            for filename in files:
+                absname = os.path.abspath(os.path.join(dirname, filename))
+                arcname = absname[len(abs_src) + 1:]
+                self.logger.debug('zipping {} as {}'.format (os.path.join(dirname, filename),arcname))
+                zf.write(absname, arcname)
+        zf.close()
+
+

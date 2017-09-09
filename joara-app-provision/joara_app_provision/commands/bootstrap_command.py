@@ -25,23 +25,10 @@ def bootstrap_add_subcommand(parser):
         default='1',
         help="what is the count of agent nodes"
     )
-    subcommand.add_argument(
-        "-e", "--evars",
-        type=str,
-        required=False,
-        help=""
-    )
 
-    subcommand.add_argument(
-        "-r", "--retry",
-        required=False,
-        action="store_true",
-        help=""
-    )
-
+    subcommand.add_argument('--verbose', required=False, action='count', default=True)
     return subcommand
 
 
 def bootstrap_subcommand(args):
     from_base.provision(args)
-

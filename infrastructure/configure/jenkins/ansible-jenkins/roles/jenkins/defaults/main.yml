@@ -6,6 +6,7 @@ jenkins_port: 8080
 jenkins_jar_location: /opt/jenkins-cli.jar
 jenkins_directory: /var/lib/jenkins
 jenkins_plugins:
+  - ansicolor
   - build-timestamp
   - azure-credentials
   - ace-editor

@@ -16,23 +16,10 @@ def configure_add_subcommand(parser):
         help="Which module to configure. "
     )
 
-    subcommand.add_argument(
-        "-e", "--evars",
-        type=str,
-        required=False,
-        help=""
-    )
-
-    subcommand.add_argument(
-        "-r", "--retry",
-        required=False,
-        action="store_true",
-        help=""
-    )
+    subcommand.add_argument('--verbose', required=False, action='count', default=True)
 
     return subcommand
 
 
 def configure_subcommand(args):
     from_base.configure(args)
-
