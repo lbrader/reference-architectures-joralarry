@@ -66,7 +66,20 @@ image_default_action ()
 }
 
 pre_setup_env
-image_default_action
+
+if [[ "$TO_DATACENTER" == "dev" ]]; then
+  image_default_action
+elif [[ "$TO_DATACENTER" == "test" ]]; then
+  CMD="joara -d $TO_DATACENTER syncimage --group image --task copy --source dev --verbose"
+  run_command "${CMD}"
+elif [[ "$TO_DATACENTER" == "master" ]]; then
+  TO_DATACENTER='prod'
+  CMD="joara -d $TO_DATACENTER syncimage --group image --task copy --source test --verbose"
+  run_command "${CMD}"
+else
+    failure_echo "!!!! No environment matched !!!!"
+fi
+
 
 
 success_echo "Deleting logs directory"
