@@ -31,6 +31,10 @@ failure_echo () {
 TO_DATACENTER="$1"
 IMAGE_NAME="$2"
 
+if [ "$TO_DATACENTER" == "master" ]; then
+  TO_DATACENTER='dev'
+fi
+
 if [ -z "$TO_DATACENTER" ] ; then
     success_echo "\$TO_DATACENTER was not set"
     exit 1
