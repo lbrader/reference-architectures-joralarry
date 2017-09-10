@@ -102,5 +102,5 @@ fi
 
 
 success_echo "Deleting logs directory"
-CMD="sudo rm -rf logs"
+CMD="rm -rf logs"
 run_command "${CMD}"
