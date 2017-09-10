@@ -31,17 +31,17 @@ failure_echo () {
 
 TO_DATACENTER="$1"
 IMAGE_NAME="$2"
-AZURE_SUBSCRIPTION_ID="$3"
-AZURE_CLIENT_ID="$4"
-AZURE_CLIENT_SECRET="$5"
-AZURE_TENANT_ID="$6"
+#AZURE_SUBSCRIPTION_ID="$3"
+#AZURE_CLIENT_ID="$4"
+#AZURE_CLIENT_SECRET="$5"
+#AZURE_TENANT_ID="$6"
 
 if [ "$TO_DATACENTER" == "master" ]; then
   TO_DATACENTER='dev'
 fi
 
 
-export PATH=/opt/conda/bin:$PATH
+export PATH=/var/lib/jenkins/conda/bin:$PATH
 #source deactivate vjoaraapp3
 #conda remove -y -n vjoaraapp3 --all
 #conda create y -n -vjoaraapp3 python

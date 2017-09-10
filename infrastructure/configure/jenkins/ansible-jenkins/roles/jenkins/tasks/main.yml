@@ -6,6 +6,10 @@
 - include: packages.yml
   when: pre_install == "false"
 
+- include: jenkinspackages.yml
+  when: pre_install == "false"
+  become_user: jenkins
+
 - include: docker.yml
   when: pre_install == "false"
 
