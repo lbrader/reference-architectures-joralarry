@@ -44,7 +44,7 @@ pre_setup_env ()
 {
     success_echo "Installing JOARA"
     export PATH=/var/lib/jenkins/conda/bin:$PATH
-    conda create -n -y vjoaraapp3 python
+    #conda create -n vjoaraapp3 python
     source activate vjoaraapp3
     CMD="pip install --editable joara-app-provision"
     run_command "${CMD}"
@@ -55,7 +55,7 @@ image_default_action ()
 {
     image_action="build,push,deploy"
     success_echo "Docker Image build,push, deploy"
-    export PATH=/opt/conda/bin:$PATH
+    export PATH=/var/lib/jenkins/conda/bin:$PATH
     source activate vjoaraapp3
     IFS=', ' read -r -a array <<< "$image_action"
     for action in "${array[@]}"

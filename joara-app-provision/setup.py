@@ -37,8 +37,7 @@ setup(
         'jinja2',
         'kubernetes',
         'websocket-client===0.40.0',
-        'paramiko',
-        'setuptools>=21.0.0'
+        'paramiko'
 
 
     ]
