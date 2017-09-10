@@ -349,6 +349,8 @@ class Context(object):
     def copy_sub_project(self, sub_project):
         self.cd(os.path.join(self.app_project_path, sub_project))
         temp_dir = self.get_temp_dir()
+        self.logger.info("project path:{}".format(os.path.join(self.app_project_path, sub_project)))
+        self.logger.info("temp path:{}".format(os.path.join(os.path.join(temp_dir, sub_project))))
         self.copy_and_overwrite(os.path.join(self.app_project_path, sub_project), os.path.join(temp_dir, sub_project))
         self.cd(os.path.join(temp_dir, sub_project))
 
@@ -356,6 +358,7 @@ class Context(object):
         self.cd_project()
         temp_dir = self.get_temp_dir()
         self.copy_and_overwrite(os.path.join(self.app_project_path), os.path.join(temp_dir, self.project_name))
+        self.logger.info("project path:{}".format(os.path.join(temp_dir, self.project_name)))
         self.cd(os.path.join(temp_dir, self.project_name))
 
     def copy_and_overwrite(self, from_path, to_path):
