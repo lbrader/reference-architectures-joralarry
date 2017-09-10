@@ -91,7 +91,7 @@ if [[ "$TO_DATACENTER" == "dev" ]]; then
 elif [[ "$TO_DATACENTER" == "test" ]]; then
   CMD="joara -d $TO_DATACENTER syncimage --group image --task copy --source dev --verbose"
   run_command "${CMD}"
-elif [[ "$TO_DATACENTER" == "master" ]]; then
+elif [[ "$TO_DATACENTER" == "prod" ]]; then
   CMD="joara -d $TO_DATACENTER syncimage --group image --task copy --source test --verbose"
   run_command "${CMD}"
 else
