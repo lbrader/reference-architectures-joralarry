@@ -38,6 +38,7 @@ fi
 
 
 export PATH=/opt/conda/bin:$PATH
+source deactivate vjoaraapp3
 conda remove -y -n vjoaraapp3 --all
 conda create y -n -vjoaraapp3 python
 source activate vjoaraapp3
@@ -51,7 +52,7 @@ fi
 pre_setup_env ()
 {
     success_echo "Installing JOARA"
-    CMD="pip install --editable joara-app-provision"
+    CMD="sudo pip install --editable joara-app-provision"
     run_command "${CMD}"
 
 }
