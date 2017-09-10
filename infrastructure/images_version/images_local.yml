@@ -2,9 +2,9 @@ nodejs:
   branch: master
   build_hostname: h1
   build_ip_address: 127.0.0.1
-  commit: a6bbff1a00b853256834ece7982297aba277b30e
+  commit: 69ca14a7da05f73225f9d57fd053756bf66facb4
   environment: dev
   image: nodejs
   registry: joaraacrdev.azurecr.io
   user: dev
-  version: 0.0.20
+  version: 0.0.28
