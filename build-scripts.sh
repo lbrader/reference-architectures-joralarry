@@ -36,6 +36,13 @@ if [ "$TO_DATACENTER" == "master" ]; then
   TO_DATACENTER='dev'
 fi
 
+
+export PATH=/opt/conda/bin:$PATH
+conda remove -y -n vjoaraapp3 --all
+conda create y -n -vjoaraapp3 python
+source activate vjoaraapp3
+
+
 if [ -z "$TO_DATACENTER" ] ; then
     success_echo "\$TO_DATACENTER was not set"
     exit 1
@@ -44,10 +51,6 @@ fi
 pre_setup_env ()
 {
     success_echo "Installing JOARA"
-    export PATH=/var/lib/jenkins/conda/bin:$PATH
-    conda remove -y -n vjoaraapp3 --all
-    conda create y -n -vjoaraapp3 python
-    source activate vjoaraapp3
     CMD="pip install --editable joara-app-provision"
     run_command "${CMD}"
 
@@ -57,9 +60,6 @@ image_default_action ()
 {
     image_action="build,push,deploy"
     success_echo "Docker Image build,push, deploy"
-    export PATH=/var/lib/jenkins/conda/bin:$PATH
-    source activate vjoaraapp3
-    CMD="pip install --editable joara-app-provision"
     run_command "${CMD}"
     IFS=', ' read -r -a array <<< "$image_action"
     for action in "${array[@]}"
