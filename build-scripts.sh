@@ -45,7 +45,7 @@ pre_setup_env ()
     success_echo "Installing JOARA"
     export PATH=/opt/conda/bin:$PATH
     source activate vjoaraapp3
-    CMD="sudo pip install --editable joara-app-provision"
+    CMD="pip install --editable joara-app-provision"
     run_command "${CMD}"
 
 }
@@ -59,7 +59,7 @@ image_default_action ()
     IFS=', ' read -r -a array <<< "$image_action"
     for action in "${array[@]}"
     do
-        CMD="sudo joara -d $TO_DATACENTER image --images $IMAGE_NAME --task ${action} --verbose"
+        CMD="joara -d $TO_DATACENTER image --images $IMAGE_NAME --task ${action} --verbose"
         run_command "${CMD}"
     done
 
