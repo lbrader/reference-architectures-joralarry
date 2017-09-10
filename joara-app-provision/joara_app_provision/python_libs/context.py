@@ -69,6 +69,9 @@ class Context(object):
         if 'SSH_KEY_FILE' in self.cluster_config:
             self.__dict__.update({
                 'ssh_key_file': "{}{}".format(self.joara_app_main, self.cluster_config['SSH_KEY_FILE'])})
+        else:
+            self.__dict__.update({
+                'ssh_key_file': ""})
 
         self.__dict__.update({
             'resource_group_prefix': self.cluster_config['RESOURCE_GROUP_PREFIX'],
