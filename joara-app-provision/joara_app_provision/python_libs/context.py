@@ -325,6 +325,19 @@ class Context(object):
         else:
             self.logger.error("No task exist")
 
+    # def _app_project_path(self):
+    #     xs = self.project_path.split(os.sep)
+    #     self.app_project_path = ''
+    #     include = False
+    #     for x in xs:
+    #         if include:
+    #             self.app_project_path = '{}/{}'.format(
+    #                 self.app_project_path, x)
+    #         if x == 'joara-main':
+    #             include = True
+    #     self.app_project_path = '{}{}'.format(
+    #         self.joara_app_main, self.app_project_path)
+
     def _app_project_path(self):
         xs = self.project_path.split(os.sep)
         self.app_project_path = ''
@@ -333,10 +346,17 @@ class Context(object):
             if include:
                 self.app_project_path = '{}/{}'.format(
                     self.app_project_path, x)
-            if x == 'joara-main':
+            if 'joara-main' in x:
                 include = True
-        self.app_project_path = '{}{}'.format(
-            self.joara_app_main, self.app_project_path)
+
+        if self.app_project_path == '' and 'infrastructure' in xs:
+            self.app_project_path = os.sep.join(xs[xs.index('infrastructure'):])
+        else:
+            self.app_project_path = self.app_project_path.lstrip(os.path.sep)
+
+        self.logger.info("project path: {}".format(self.app_project_path))
+        self.app_project_path = os.path.join(self.joara_app_main, self.app_project_path)
+        self.logger.info("Absolute project path: {} ".format(self.app_project_path))
 
     def cd_project(self):
         self.cd(self.app_project_path)
