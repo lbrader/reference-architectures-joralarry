@@ -59,7 +59,7 @@ image_default_action ()
     IFS=', ' read -r -a array <<< "$image_action"
     for action in "${array[@]}"
     do
-        CMD="joara -d $TO_DATACENTER image --images $IMAGE_NAME --task ${action} --verbose"
+        CMD="sudo joara -d $TO_DATACENTER image --images $IMAGE_NAME --task ${action} --verbose"
         run_command "${CMD}"
     done
 
