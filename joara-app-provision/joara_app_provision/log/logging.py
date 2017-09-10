@@ -29,7 +29,6 @@ import logging
 import logging.handlers
 import colorama
 
-
 JOARA_ROOT_LOGGER_NAME = 'joara'
 
 
@@ -166,7 +165,7 @@ class JoaraRotatingFileHandler(logging.handlers.RotatingFileHandler):
 
     def get_log_file_path(self):
         if not os.path.isdir(self.LOGFILE_DIR):
-            os.makedirs(self.LOGFILE_DIR)
+            os.makedirs(self.LOGFILE_DIR, exist_ok=True)
         return os.path.join(self.LOGFILE_DIR, 'joara.log')
 
 
