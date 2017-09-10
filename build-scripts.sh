@@ -37,7 +37,7 @@ IMAGE_NAME="$2"
 #AZURE_TENANT_ID="$6"
 
 if [ "$TO_DATACENTER" == "master" ]; then
-  TO_DATACENTER='dev'
+  TO_DATACENTER='prod'
 fi
 
 
@@ -92,7 +92,6 @@ elif [[ "$TO_DATACENTER" == "test" ]]; then
   CMD="joara -d $TO_DATACENTER syncimage --group image --task copy --source dev --verbose"
   run_command "${CMD}"
 elif [[ "$TO_DATACENTER" == "master" ]]; then
-  TO_DATACENTER='prod'
   CMD="joara -d $TO_DATACENTER syncimage --group image --task copy --source test --verbose"
   run_command "${CMD}"
 else
