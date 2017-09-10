@@ -37,7 +37,7 @@ if [ "$TO_DATACENTER" == "master" ]; then
 fi
 
 
-export PATH=/var/lib/jenkins/conda/bin:$PATH
+export PATH=/opt/conda/bin:$PATH
 conda remove -y -n vjoaraapp3 --all
 conda create y -n -vjoaraapp3 python
 source activate vjoaraapp3
