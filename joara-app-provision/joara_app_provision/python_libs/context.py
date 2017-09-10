@@ -44,8 +44,7 @@ class Context(object):
         })
 
         try:
-            if (
-                                    'AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
+            if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
                 self.__dict__.update({
                     'subscription_id': os.environ['AZURE_SUBSCRIPTION_ID'],
                     'client_id': os.environ['AZURE_CLIENT_ID'],

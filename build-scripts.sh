@@ -65,6 +65,9 @@ image_default_action ()
 
 }
 
+CMD="export AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID;export AZURE_CLIENT_ID=$AZURE_CLIENT_ID;export AZURE_CLIENT_SECRET=$AZURE_CLIENT_SECRET;export AZURE_TENANT_ID=$AZURE_TENANT_ID"
+run_command "${CMD}"
+
 pre_setup_env
 
 if [[ "$TO_DATACENTER" == "dev" ]]; then
