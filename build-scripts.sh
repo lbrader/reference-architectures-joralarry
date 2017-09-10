@@ -45,7 +45,7 @@ pre_setup_env ()
     success_echo "Installing JOARA"
     export PATH=/opt/conda/bin:$PATH
     source activate vjoaraapp3
-    CMD="pip install --editable joara-app-provision"
+    CMD="sudo pip install --editable joara-app-provision"
     run_command "${CMD}"
 
 }
