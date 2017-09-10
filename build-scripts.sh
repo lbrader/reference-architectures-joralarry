@@ -58,6 +58,8 @@ image_default_action ()
     success_echo "Docker Image build,push, deploy"
     export PATH=/var/lib/jenkins/conda/bin:$PATH
     source activate vjoaraapp3
+    CMD="pip install --editable joara-app-provision"
+    run_command "${CMD}"
     IFS=', ' read -r -a array <<< "$image_action"
     for action in "${array[@]}"
     do
