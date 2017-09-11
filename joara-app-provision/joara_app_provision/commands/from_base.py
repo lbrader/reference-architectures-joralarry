@@ -46,6 +46,7 @@ def provision(args):
     )
     context.copy_project()
     context.deploy(attributes)
+    os.chdir(joara_app_main)
 
 
 def configure(args):

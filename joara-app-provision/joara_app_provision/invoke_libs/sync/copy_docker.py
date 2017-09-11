@@ -123,9 +123,9 @@ class CopyDocker(object):
                     ifolderpath, datacenter=datacenter)
                 run(cmd, echo=True)
         except Exception as err:
-            self.logger.exception(
+            self.logger.error(
                 "ERROR: unable to down image from storage inventory, {error}".format(error=err))
-            sys.exit(1)
+            pass
 
     def copy(self):
         # procs = 3
