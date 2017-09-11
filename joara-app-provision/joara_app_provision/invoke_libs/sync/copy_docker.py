@@ -224,7 +224,7 @@ class CopyDocker(object):
             currentimagedic['branch'] = localimagedic['branch']
             currentimagedic['commit'] = localimagedic['commit']
             currentimagedic['environment'] = self.attributes['cluster_config']['JOARA_APP_DATACENTER']
-            currentimagedic['comment'] = ''
+            currentimagedic["registry"] = self.attributes['cluster_config']['JOARA_APP_DOCKER_REGISTRY']
             currentimagedic['build_hostname'] = localimagedic['build_hostname']
             currentimagedic['build_ip_address'] = localimagedic['build_ip_address']
             currentimagedic['user'] = self.attributes['user']
