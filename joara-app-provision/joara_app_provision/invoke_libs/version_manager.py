@@ -79,8 +79,9 @@ class VersionManager(object):
         if datacenter != 'local':
             fnamelatest = os.path.join(self.joara_app_main, 'infrastructure',  'images_version')
             cmd = "az storage blob upload -f {}/images_{datacenter}.yml -c imagesversion -n images_{datacenter}.yml".format(
-                fnamelatest, datacenter=self.datacenter)
+                fnamelatest, datacenter=datacenter)
             run(cmd, echo=True)
+            self.logger.info("Update to images version yml completed for datacenter {}".format(datacenter=datacenter))
 
     def get_images_list(self, datacenter='local'):
         try:

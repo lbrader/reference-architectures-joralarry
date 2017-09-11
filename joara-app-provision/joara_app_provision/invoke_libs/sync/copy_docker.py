@@ -129,8 +129,9 @@ class CopyDocker(object):
 
     def copy(self):
         # procs = 3
-        self.copyfromstroage(self.datacenter)
+
         self.copyfromstroage(self.from_datacenter)
+        self.copyfromstroage(self.datacenter)
         list_image = self.version_manager.get_images_list(datacenter=self.from_datacenter)
 
         # Create a list of jobs and then iterate through
