@@ -81,7 +81,7 @@ class VersionManager(object):
             cmd = "az storage blob upload -f {}/images_{datacenter}.yml -c imagesversion -n images_{datacenter}.yml".format(
                 fnamelatest, datacenter=datacenter)
             run(cmd, echo=True)
-            self.logger.info("Update to images version yml completed for datacenter {}".format(datacenter=datacenter))
+            self.logger.info("Update to images version yml completed for datacenter {datacenter}".format(datacenter=datacenter))
 
     def get_images_list(self, datacenter='local'):
         try:
