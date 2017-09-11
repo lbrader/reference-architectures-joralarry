@@ -152,7 +152,7 @@ class CopyDocker(object):
                 tag = image_dic['version']
                 user = self.attributes['user']
                 if 'not exist' not in tag  and (from_registry != self.registry or user != from_user):
-                    if current_dc_image_dic['version'] != image_dic['version']:
+                    if not current_dc_image_dic or (current_dc_image_dic['version'] != image_dic['version']):
                         process = Process(target=self.syncdocker,
                                           args=(from_registry, from_user, name, tag, return_dict))
                         jobs.append(process)
