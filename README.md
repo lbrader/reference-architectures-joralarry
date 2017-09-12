@@ -19,9 +19,9 @@
 > export PATH=/home/user/miniconda3/bin:$PATH
 > conda create -n vjoaraapp3 python
 > source activate vjoaraapp3
-> git clone joara
+> git clone https://github.com/Snap-Analytx/joara-main.git
 > pip install --editable joara-app-provision
-> joara -d dev bootstrap --group acs
-
-
+> joara -d dev bootstrap -group acs -verbose
+> joara -d test bootstrap -group all –verbose
+> joara -d dev bootstrap -group all -verbose
 ```
