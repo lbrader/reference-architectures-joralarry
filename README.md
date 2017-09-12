@@ -26,4 +26,4 @@
 > joara -d dev bootstrap --group acs --verbose
 > joara -d test bootstrap --group all –-verbose
 > joara -d prod bootstrap --group all --verbose
-> joara -d jenkins bootstrap --group all --verbose
+> joara -d jenkins bootstrap --group jenkins --verbose
