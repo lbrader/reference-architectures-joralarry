@@ -12,8 +12,8 @@
 
 ## Usage in Linux
 
+
 ```shell
-** First install and configure python **
 > wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
 > chmod +x Miniconda3-latest-Linux-x86_64.sh
 > ./Miniconda3-latest-Linux-x86_64.sh
@@ -21,6 +21,7 @@
 > conda create -n vjoaraapp3 python
 > source activate vjoaraapp3
 > git clone https://github.com/Snap-Analytx/joara-main.git
+> cd joara-main
 > pip install --editable joara-app-provision
 > joara -d dev bootstrap -group acs -verbose
 > joara -d test bootstrap -group all –verbose
