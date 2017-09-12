@@ -23,7 +23,7 @@
 > git clone https://github.com/Snap-Analytx/joara-main.git
 > cd joara-main
 > pip install --editable joara-app-provision
-> joara -d dev bootstrap -group acs --verbose
-> joara -d test bootstrap -group all –-verbose
-> joara -d prod bootstrap -group all --verbose
-```
+> joara -d dev bootstrap --group acs --verbose
+> joara -d test bootstrap --group all –-verbose
+> joara -d prod bootstrap --group all --verbose
+> joara -d jenkins bootstrap --group all --verbose
