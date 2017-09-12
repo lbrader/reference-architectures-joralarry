@@ -10,7 +10,13 @@
 5. **Infrastructure/configure** - Jenkins Configuration
 6. **joara-app-provision** - Joara CLI
 
+
+
 ## Usage in Linux
+
+### Config
+
+Azure credentials and others details can be configured in _cluster.ini_ file
 
 
 ```shell
@@ -27,3 +33,13 @@
 > joara -d test bootstrap --group all –-verbose
 > joara -d prod bootstrap --group all --verbose
 > joara -d jenkins bootstrap --group jenkins --verbose
+```
+
+## To Destroy existing resources
+
+```shell
+joara -d prod destroy --group acs --verbose
+joara -d dev destroy --group acs --verbose
+joara -d test destroy --group acs --verbose
+joara -d jenkins destroy --group jenkins --verbose
+```
