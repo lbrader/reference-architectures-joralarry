@@ -15,6 +15,12 @@ import json
 from azure.mgmt.storage import StorageManagementClient
 from azure.common.credentials import ServicePrincipalCredentials
 import git
+from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.containerregistry import ContainerRegistryManagementClient
+from azure.cli.command_modules.acr.custom import acr_login
+from base64 import b64encode
+import requests
+from requests.utils import to_native_string
 from ..log import logging
 
 class Image(object):
@@ -37,19 +43,20 @@ class Image(object):
         self.attributes['user'] = self.attributes['cluster_config']['APP_DATACENTER']
         self.app_main = self.attributes['app_main']
         self.attributes['datacenter'] = self.attributes['cluster_config']['APP_DATACENTER']
-        self.docker_user = self.attributes['cluster_config']['APP_DATACENTER']
-        self.docker_registry =  self.app_docker_registry
-        self.resource_group_prefix = self.attributes['cluster_config']['RESOURCE_GROUP_PREFIX']
         self.datacenter = self.attributes['datacenter']
+        self.docker_user = self.attributes['cluster_config']['APP_DATACENTER']
+        self.app_docker_registry="{}acr{}.azurecr.io".format(self.attributes['cluster_config']['RESOURCE_GROUP_PREFIX'], self.datacenter)
+        self.resource_group_prefix = self.attributes['cluster_config']['RESOURCE_GROUP_PREFIX']
         self.attributes['commit'] = self._get_git_commit()
 
         try:
             if ( 'AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ) :
-                self.credentials = ServicePrincipalCredentials(
-                    client_id=os.environ['AZURE_CLIENT_ID'],
-                    secret=os.environ['AZURE_CLIENT_SECRET'],
-                    tenant=os.environ['AZURE_TENANT_ID']
-                )
+
+                self.__dict__.update({
+                    'subscription_id': os.environ['AZURE_SUBSCRIPTION_ID'],
+                    'client_id': os.environ['AZURE_CLIENT_ID'],
+                    'client_secret': os.environ['AZURE_CLIENT_SECRET'],
+                    'tenant_id': os.environ['AZURE_TENANT_ID']})
             else:
                 self.__dict__.update({
                     'subscription_id': self.cluster_config['AZURE_SUBSCRIPTION_ID'],
@@ -66,32 +73,42 @@ class Image(object):
                 self.logger.error(logs)
                 raise RuntimeError(logs)
 
-        if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
-            storage_client = StorageManagementClient(self.credentials, os.environ['AZURE_SUBSCRIPTION_ID'])
-            resource_group = "{}-{}".format(self.resource_group_prefix, self.datacenter)
-            storage_name = "{}{}".format(self.resource_group_prefix, self.datacenter)
-            storage_keys = storage_client.storage_accounts.list_keys(resource_group, storage_name)
-            storage_keys = {v.key_name: v.value for v in storage_keys.keys}
+        self.credentials = ServicePrincipalCredentials(
+            client_id=self.client_id,
+            secret=self.client_secret,
+            tenant=self.tenant_id
+        )
 
-            if storage_keys:
-                os.environ['AZURE_STORAGE_KEY']=  storage_keys['key1']
-                os.environ['AZURE_STORAGE_ACCOUNT'] = storage_name
-                run("az storage container create -n {}".format("imagesversion"))
+        self.client = ContainerRegistryManagementClient(self.credentials, self.subscription_id)
 
-            run("az login -u {} -p {} --tenant {} --service-principal".format(os.environ['AZURE_CLIENT_ID'], os.environ['AZURE_CLIENT_SECRET'],
-                                                                              os.environ['AZURE_TENANT_ID']))
-            run("az acr login --name {}acr{}".format(self.resource_group_prefix,self.datacenter))
-        else:
-            logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, "
-            self.logger.error(logs)
-            raise RuntimeError(logs)
+        if self.task == "build" or self.task == "push":
+            if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
+                storage_client = StorageManagementClient(self.credentials, os.environ['AZURE_SUBSCRIPTION_ID'])
+                resource_group = "{}-{}".format(self.resource_group_prefix, self.datacenter)
+                storage_name = "{}{}".format(self.resource_group_prefix, self.datacenter)
+                storage_keys = storage_client.storage_accounts.list_keys(resource_group, storage_name)
+                storage_keys = {v.key_name: v.value for v in storage_keys.keys}
+
+                if storage_keys:
+                    os.environ['AZURE_STORAGE_KEY']=  storage_keys['key1']
+                    os.environ['AZURE_STORAGE_ACCOUNT'] = storage_name
+                    run("az storage container create -n {}".format("imagesversion"))
+
+
+            else:
+                logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, "
+                self.logger.error(logs)
+                raise RuntimeError(logs)
 
         if self.task == "build" or self.task == "push" :
+            run("az login -u {} -p {} --tenant {} --service-principal".format(os.environ['AZURE_CLIENT_ID'], os.environ['AZURE_CLIENT_SECRET'],
+                 os.environ['AZURE_TENANT_ID']))
+            run("az acr login --name {}acr{}".format(self.resource_group_prefix,self.datacenter))
+            #self._docker_login()
             self.attributes['version'] = self._get_next_version()
 
             self.attributes['fqdi'] = "{registry}/{user}/{image}:{version}".format(
-                registry=self.attributes['cluster_config'][
-                    'APP_DOCKER_REGISTRY'],
+                registry=self.app_docker_registry,
                 user=self.attributes['user'],
                 image=self.attributes['image'],
                 version=self.attributes['version']
@@ -210,15 +227,74 @@ class Image(object):
         else:
             return self._get_tags_v2()
 
+
+    def _docker_login(self):
+        try:
+
+            resource_group="{resourcegroup}-{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter)
+            registry_name="{resourcegroup}acr{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter)
+            registries = self.client.registries
+            registry = registries.get(resource_group, registry_name)
+
+            if registry.admin_user_enabled:
+                cred = registries.list_credentials(resource_group, registry_name)
+                acr_login("{}.azurecr.io".format(registry_name),resource_group,cred.username,cred.passwords[0].value)
+                self.logger.info("Docker logged in with ACR Credentials")
+            else:
+                self.logger.error("ACR Not enable with admin access, please enable it")
+        except Exception as err:
+            self.logger.error("Error logging into docker using acr credentials: {0}.".format(err))
+
     def _get_tags_v2(self):
         try:
-            response = self.getoutput("az acr repository show-tags --name joaraacr{datacenter} --repository {datacenter}/{image}  -o json".format(datacenter=self.attributes['cluster_config']['APP_DATACENTER'],image=self.attributes['image']))
-            response=json.loads(response)
+
+            resource_group="{resourcegroup}-{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter)
+            registry_name="{resourcegroup}acr{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter)
+            registries=self.client.registries
+            registry = registries.get(resource_group, registry_name)
+            repository="{datacenter}/{image}".format(datacenter=self.datacenter,image=self.attributes['image'])
+
+            if registry.admin_user_enabled:
+                cred = registries.list_credentials(resource_group, registry_name)
+                response = self._obtain_data_from_registry("{}.azurecr.io".format(registry_name),"/v2/{}/tags/list".format(repository),cred.username,cred.passwords[0].value)
+            else:
+                self.logger.error("ACR Not enable with admin access, please enable it")
+
             return response
         except Exception as err:
             self.logger.error("Error getting image detail from repo: {0}.".format(err))
             return None
         return response
+
+    def _basic_auth_str(self,username, password):
+        return 'Basic ' + to_native_string(
+            b64encode(('%s:%s' % (username, password)).encode('latin1')).strip()
+        )
+
+    def _headers(self,username, password):
+        auth = self._basic_auth_str(username, password)
+        return {'Authorization': auth}
+
+    def _obtain_data_from_registry(self,login_server,
+                                   path,
+                                   username,
+                                   password):
+        try:
+            registryEndpoint = 'https://' + login_server
+            response = requests.get(
+                registryEndpoint + path,
+                headers=self._headers(username, password)
+            )
+            response.raise_for_status()
+            if response.status_code == 200:
+                result = response.json()["tags"]
+                self.logger.info("ACR Image versions:{}".format(result))
+                return result
+            else:
+                self.logger.exception("Error getting image detail from acr")
+        except Exception as err:
+            self.logger.error("Error getting image detail from repo: {0}.".format(err))
+            return None
 
     def _get_next_version(self):
         v = self._get_version()
@@ -240,8 +316,7 @@ class Image(object):
 
             docker_registry = "{registry}/{user}/{image}:{v}".format(
                 v=str(v),
-                registry=self.attributes['cluster_config'][
-                    'APP_DOCKER_REGISTRY'],
+                registry=self.app_docker_registry,
                 user=self.attributes['user'],
                 image=self.attributes['image']
             )

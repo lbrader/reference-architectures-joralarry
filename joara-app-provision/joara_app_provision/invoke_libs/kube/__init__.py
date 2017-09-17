@@ -23,25 +23,22 @@ class KubeApi(object):
     def __init__(self, datacenter, **kwargs):
         self.logger = logging.get_logger(self.__class__.__name__)
         self.datacenter = datacenter
+
         self.image = kwargs['image']
-        img = Image(deploy=True, **kwargs)
-        self.version = img.current_version()
-        user= kwargs["cluster_config"]["APP_DATACENTER"]
+        user = kwargs["cluster_config"]["APP_DATACENTER"]
 
         try:
-
-            os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
-            run(
-                "scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa joaraacs{datacenter}@jora-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
-                    location=self.regionmap[self.location],user=os.path.expanduser("~"), datacenter=self.datacenter))
-            self.logger.info("Copied kube config from acs remote server")
             config.load_kube_config()
             self.apiclient = api_client.ApiClient()
             self.api = core_v1_api.CoreV1Api(self.apiclient)
             self.k8s_beta = client.ExtensionsV1beta1Api()
         except Exception as err:
-            self.logger.error("Error copying Kube config, Exception: {} ".format(err))
+            self.logger.error("Error loading Kube config, Exception: {} ".format(err))
             sys.exit(1)
+
+
+        img = Image(deploy=True, **kwargs)
+        self.version = img.current_version()
 
         attributes = {
             "datacenter": self.datacenter,
@@ -49,19 +46,17 @@ class KubeApi(object):
             "user": user,
             "replicas": kwargs['count'] if int(kwargs['count']) > 1 else self._getreplica(),
             "name": self.image,
-            "registry": kwargs["cluster_config"]["APP_DOCKER_REGISTRY"],
+            "registry": kwargs["app_docker_registry"],
             "deploy_app": deployment_app,
             "service_app": service_app
         }
         attributes.update(kwargs)
         self.attributes = attributes
-        self.replicas= int(self.attributes["replicas"])
-
-
+        self.replicas = int(self.attributes["replicas"])
         self.deploy_app = render(attributes['deploy_app'], attributes)
         self.service_app = render(attributes['service_app'], attributes)
-
-
+        self.logger.info("Image processing name:{image}, version:{version}".format(image=self.image,version=self.version))
+        self.logger.warn("Image processing name:{image}, version:{version}".format(image=self.image, version=self.version))
 
     def _getreplica(self):
         count = 1
@@ -72,7 +67,7 @@ class KubeApi(object):
                     count = int(i.spec.replicas)
                     if count > 0:
                         self.logger.info("Deployment already running in datacenter")
-                        self.logger.debug("Deployment: {image} already running in datacenter {datacenter} with replica {count} deployed ###".format(
+                        self.logger.debug("Deployment: {image} already running in datacenter {datacenter} with replica {count} deployed".format(
                             image=self.image, datacenter=self.datacenter, count=count))
                         return count
             return count
@@ -91,7 +86,7 @@ class KubeApi(object):
                     tag = xs.pop()
                     image = xs.pop()
                     self.logger.info("Deployment already running in datacenter")
-                    self.logger.debug("Deployment: {image} already running in datacenter {datacenter} with image name {deployedimage} deployed ###".format(
+                    self.logger.debug("Deployment: {image} already running in datacenter {datacenter} with image name {deployedimage} deployed".format(
                             image=self.image, datacenter=self.datacenter, deployedimage=deployedimage))
                     return tag
             return "Not Found"
@@ -182,7 +177,7 @@ class KubeApi(object):
             resp = self.k8s_beta.list_namespaced_deployment(namespace="default")
             for i in resp.items:
                 if i.metadata.name == self.image:
-                    self.logger.info("Deployment: {deployment} deployed ###".format(deployment=self.image))
+                    self.logger.info("Deployment: {deployment} deployed".format(deployment=self.image))
                     return True
             return False
         except Exception as err:
@@ -194,13 +189,27 @@ class KubeApi(object):
             resp = self.k8s_beta.list_namespaced_deployment(namespace="default")
             for i in resp.items:
                 if i.metadata.name == self.image:
-                    self.logger.info("Deployment Details: {deployment} ###".format(deployment=i))
+                    self.logger.info("Deployment Details: {deployment}".format(deployment=i))
                     return True
 
                 self.logger.info("Deployment Details: {image} doesn't exist".format(image=self.image))
             return False
         except Exception as err:
             self.logger.error("Error getting deployment details: {}. ".format(err))
+            return False
+
+    def getservice(self):
+        try:
+            resp = self.api.list_namespaced_service(namespace="default")
+            self.logger.debug("Service details. status='{}' ".format(resp))
+            for i in resp.items:
+                if i.metadata.name == self.image:
+                    self.logger.info("Service: {service} running @ip: {ip}".format(service=self.image,ip=i.status.load_balancer.ingress[0].ip))
+                    self.logger.warning("Service: {service} running @ip: {ip}".format(service=self.image, ip=i.status.load_balancer.ingress[0].ip))
+                    return True
+            return False
+        except Exception as err:
+            self.logger.error("Error getting service details: {}. ".format(err))
             return False
 
     def flatmap(self,f, items):
@@ -212,7 +221,7 @@ class KubeApi(object):
             self.logger.debug("Service details. status='{}' ".format(resp))
             for i in resp.items:
                 if i.metadata.name == self.image:
-                    self.logger.info("Service: {service} running @ip: {ip} ###".format(service=self.image,ip=i.status.load_balancer.ingress[0].ip))
+                    self.logger.info("Service: {service} running @ip: {ip}".format(service=self.image,ip=i.status.load_balancer.ingress[0].ip))
                     return True
             return False
         except Exception as err:

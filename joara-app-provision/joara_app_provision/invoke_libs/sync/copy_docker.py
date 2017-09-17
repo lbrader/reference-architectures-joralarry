@@ -29,7 +29,7 @@ class CopyDocker(object):
         self.app_main = self.attributes['cluster_config']['APP_MAIN']
         self.datacenter = self.attributes['cluster_config']['APP_DATACENTER']
         self.from_datacenter = self.attributes["from_datacenter"]
-        self.registry =  self.app_docker_registry
+        self.registry = kwargs["app_docker_registry"]
         self.resource_group_prefix = self.attributes['cluster_config']['RESOURCE_GROUP_PREFIX']
 
         try:
@@ -79,10 +79,13 @@ class CopyDocker(object):
 
 
         try:
-            os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
-            #run("az acs kubernetes get-credentials --resource-group=jora-{datacenter} --name=jora-acs-{datacenter}".format(datacenter=self.datacenter))
-            run("scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa {resourcegroup}acs{datacenter}@jora-acs-mgmt-{datacenter}.eastus.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
-                resourcegroup=self.resource_group_prefix,user=os.path.expanduser("~"), datacenter=self.datacenter))
+            # os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
+            # #run("az acs kubernetes get-credentials --resource-group=jora-{datacenter} --name=jora-acs-{datacenter}".format(datacenter=self.datacenter))
+            # # run("scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa {resourcegroup}acs{datacenter}@jora-acs-mgmt-{datacenter}.eastus.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
+            # #     resourcegroup=self.resource_group_prefix,user=os.path.expanduser("~"), datacenter=self.datacenter))
+            # run(
+            #     "scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa {resourcegroup}acs{datacenter}@{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
+            #         resourcegroup=kwargs["cluster_config"]["RESOURCE_GROUP_PREFIX"],location=kwargs["location"],user=os.path.expanduser("~"), datacenter=self.datacenter))
             config.load_kube_config()
             self.apiclient = api_client.ApiClient()
             self.api = core_v1_api.CoreV1Api(self.apiclient)
@@ -162,10 +165,10 @@ class CopyDocker(object):
                         self.logger.info( "image {} version are already in sync".format(image_name))
 
         if len(jobs) == 0:
-            self.logger.info( "No images exist to copy from datcenter: {} to  datacenter: {}".format( self.from_datacenter,self.datacenter))
+            self.logger.info( "No images exist to copy from datacenter: {} to  datacenter: {}".format( self.from_datacenter,self.datacenter))
 
         else:
-            self.logger.info("Total no. of images to copy from datcenter: {} to  datacenter: {} is {}".format(self.from_datacenter, self.datacenter,len(jobs)))
+            self.logger.info("Total no. of images to copy from datacenter: {} to  datacenter: {} is {}".format(self.from_datacenter, self.datacenter,len(jobs)))
 
             for j in jobs:
                 j.start()
@@ -176,11 +179,11 @@ class CopyDocker(object):
 
             if len(return_dict.values()) == len(jobs):
 
-                self.logger.info("Successfully copied images from datcenter: {} to  datacenter: {}".format(self.from_datacenter,self.datacenter))
+                self.logger.info("Successfully copied images from datacenter: {} to  datacenter: {}".format(self.from_datacenter,self.datacenter))
                 self.logger.info("Overall status: {}".format(str(return_dict)))
 
             else:
-                self.logger.info("ERROR: All images are not copied from datcenter: {} to  datacenter: {}, please refer error messages".format(self.from_datacenter,self.datacenter))
+                self.logger.info("ERROR: All images are not copied from datacenter: {} to  datacenter: {}, please refer error messages".format(self.from_datacenter,self.datacenter))
                 self.logger.info("Overall status: {}".format(str(return_dict)))
 
 
@@ -244,7 +247,7 @@ class CopyDocker(object):
                 if i.metadata.name == image:
                     count = int(i.spec.replicas)
                     self.logger.info(
-                        "### Deployment: {image} already running in datacenter {datacenter} with replica {count} deployed ###".format(
+                        "Deployment: {image} already running in datacenter {datacenter} with replica {count} deployed".format(
                             image=self.image, datacenter=self.datacenter, count=count))
             module = os.path.join('infrastructure', 'images', 'run')
             args = Attributes(

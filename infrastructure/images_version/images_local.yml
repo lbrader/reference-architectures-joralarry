@@ -8,3 +8,13 @@ nodejs:
   registry: joaraacrdev.azurecr.io
   user: dev
   version: 0.0.28
+nodejso:
+  branch: master
+  build_hostname: h1
+  build_ip_address: 127.0.0.1
+  commit: 462c30f0b409bc736aa26758b67413f1b185fadd
+  environment: dev
+  image: nodejso
+  registry: ajoaraacrdev.azurecr.io
+  user: dev
+  version: 0.0.2

@@ -11,7 +11,7 @@ class sshclient(object):
 
     def __init__(self, address, username):
         self.logger = logging.get_logger(self.__class__.__name__)
-        self.logger.info("### Connecting to server. ###".format(self))
+        self.logger.info("Connecting to server.".format(self))
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
         self.client.connect(address, username=username, key_filename='{user}/.ssh/id_rsa'.format(user=os.path.expanduser("~")))
@@ -30,11 +30,15 @@ class sshclient(object):
                     self.logger.info(str(alldata, "utf8"))
                     return str(alldata, "utf8")
         else:
-            self.logger.info("### Connection not opened. ###".format(self))
+            self.logger.info("Connection not opened.".format(self))
 
     def copyFile(self,path):
         with SCPClient(self.client.get_transport()) as scp:
             scp.put(path,  "/tmp")
+
+    def copyFileFrom(self,path,localpath):
+        with SCPClient(self.client.get_transport()) as scp:
+            scp.get(path,  localpath)
 
     def zipdir(self,path, ziph):
         for root, dirs, files in os.walk(path):

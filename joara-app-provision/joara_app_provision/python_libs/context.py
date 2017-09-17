@@ -287,7 +287,16 @@ class Context(object):
         attrs = {}
         cluster_config = get_cluster_config(self.datacenter)
         attrs['cluster_config'] = cluster_config
+        attrs['app_docker_registry'] = self.app_docker_registry
+        attrs['location'] = self.regionmap[self.location]
         attrs.update(config_dict)
+        os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
+        self.sshclient = remote.sshclient("{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com".format(
+            resourcegroup=self.resource_group_prefix, location=self.regionmap[self.location],
+            datacenter=self.datacenter), "{resourcegroup}acs{datacenter}".format(
+            resourcegroup=self.resource_group_prefix, datacenter=self.datacenter))
+        self.sshclient.copyFileFrom(".kube/config", "{user}/.kube/config".format(user=os.path.expanduser("~")))
+        self.logger.info("Copied kube config from acs remote server")
         copy = CopyDocker(datancenter=self.datacenter, **attrs)
         if args.task == "copy":
             copy.copy()
@@ -320,11 +329,17 @@ class Context(object):
         attrs['task'] = args.task
         cluster_config = get_cluster_config(self.datacenter)
         attrs['cluster_config'] = cluster_config
+        attrs['app_docker_registry'] =self.app_docker_registry
+        attrs['location'] = self.regionmap[self.location]
         attrs.update(config_dict)
 
-        if args.task in ["deploy", "scale", "patch", "get", "delete", "push"]:
+        if args.task in ["deploy", "scale", "patch", "get", "getservice", "delete"]:
+            os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
+            self.sshclient = remote.sshclient("{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.regionmap[self.location],datacenter=self.datacenter), "{resourcegroup}acs{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter))
+            self.sshclient.copyFileFrom(".kube/config","{user}/.kube/config".format(user=os.path.expanduser("~")))
+            self.logger.info("Copied kube config from acs remote server")
             kube = KubeApi(datacenter=self.datacenter, **attrs)
-        if args.task in ["build", "push", "all"]:
+        if args.task in ["build", "push"]:
             image = Image(**attrs)
 
         if args.task == "deploy":
@@ -335,6 +350,8 @@ class Context(object):
             kube.patch()
         elif args.task == "get":
             kube.get()
+        elif args.task == "getservice":
+            kube.getservice()
         elif args.task == "delete":
             kube.delete()
         elif args.task == "build":

@@ -21,7 +21,8 @@ def image_add_subcommand(parser):
             'scale',
             'patch',
             'delete',
-            'get'
+            'get',
+            'getservice'
         ],
         help="Which action to be performed on the image "
     )
