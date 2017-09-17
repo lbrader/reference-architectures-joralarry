@@ -79,13 +79,6 @@ class CopyDocker(object):
 
 
         try:
-            # os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
-            # #run("az acs kubernetes get-credentials --resource-group=jora-{datacenter} --name=jora-acs-{datacenter}".format(datacenter=self.datacenter))
-            # # run("scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa {resourcegroup}acs{datacenter}@jora-acs-mgmt-{datacenter}.eastus.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
-            # #     resourcegroup=self.resource_group_prefix,user=os.path.expanduser("~"), datacenter=self.datacenter))
-            # run(
-            #     "scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa {resourcegroup}acs{datacenter}@{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
-            #         resourcegroup=kwargs["cluster_config"]["RESOURCE_GROUP_PREFIX"],location=kwargs["location"],user=os.path.expanduser("~"), datacenter=self.datacenter))
             config.load_kube_config()
             self.apiclient = api_client.ApiClient()
             self.api = core_v1_api.CoreV1Api(self.apiclient)

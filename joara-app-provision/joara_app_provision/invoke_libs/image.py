@@ -285,13 +285,13 @@ class Image(object):
                 registryEndpoint + path,
                 headers=self._headers(username, password)
             )
-            response.raise_for_status()
             if response.status_code == 200:
                 result = response.json()["tags"]
                 self.logger.info("ACR Image versions:{}".format(result))
                 return result
             else:
                 self.logger.exception("Error getting image detail from acr")
+            #response.raise_for_status()
         except Exception as err:
             self.logger.error("Error getting image detail from repo: {0}.".format(err))
             return None
