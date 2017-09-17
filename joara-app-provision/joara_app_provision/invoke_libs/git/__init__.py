@@ -24,7 +24,7 @@ class GitHubApi(object):
         self.jenkinshost = kwargs['jenkins_host']
         self.image = kwargs['image']
         self.attributes = {
-            "jenkins_hook_url": "http://{host}:8080/github-webhook/".format(host=self.jenkinshost),
+            "jenkins_hook_url": "http://{host}/github-webhook/".format(host=self.jenkinshost),
             "webhook_hook": webhook_hook,
             "branch_protect": branch_protect
         }
@@ -130,7 +130,7 @@ class GitHubApi(object):
 
     def create_repo_hook(self, name):
         self.logger.info("Creating webhook for repository:{}".format(name))
-        self.github.get_organization(self.orgid).get_repo(name).create_hook("jenkins", {"jenkins_hook_url": "http://{host}:8080/github-webhook/".format(host=self.jenkinshost)})
+        self.github.get_organization(self.orgid).get_repo(name).create_hook("jenkins", {"jenkins_hook_url": "http://{host}/github-webhook/".format(host=self.jenkinshost)})
         self.logger.info("Completed creating webhook for repository:{}".format(name))
 
     def make_api_headers(self):
