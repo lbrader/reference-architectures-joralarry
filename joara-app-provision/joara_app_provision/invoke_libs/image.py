@@ -25,7 +25,7 @@ class Image(object):
             'registry_version': 'v2',
             'deploy': False
         }
-        self.logger = logging.get_joara_logger(self.__class__.__name__)
+        self.logger = logging.get_logger(self.__class__.__name__)
         self.attributes.update(kwargs)
         if 'dockerfile_ext' in kwargs:
             self.attributes['dockerfile'] = "Dockerfile.{}".format(kwargs['dockerfile_ext'])
@@ -33,12 +33,12 @@ class Image(object):
             self.attributes['dockerfile'] = "Dockerfile"
 
         self.task =self.attributes['task']
-        self.attributes['joara_app_main'] = self.attributes['cluster_config']['JOARA_APP_MAIN']
-        self.attributes['user'] = self.attributes['cluster_config']['JOARA_APP_DOCKER_USER']
-        self.joara_app_main = self.attributes['joara_app_main']
-        self.attributes['datacenter'] = self.attributes['cluster_config']['JOARA_APP_DATACENTER']
-        self.docker_user = self.attributes['cluster_config']['JOARA_APP_DOCKER_USER']
-        self.docker_registry = self.attributes['cluster_config']['JOARA_APP_DOCKER_REGISTRY']
+        self.attributes['app_main'] = self.attributes['cluster_config']['APP_MAIN']
+        self.attributes['user'] = self.attributes['cluster_config']['APP_DATACENTER']
+        self.app_main = self.attributes['app_main']
+        self.attributes['datacenter'] = self.attributes['cluster_config']['APP_DATACENTER']
+        self.docker_user = self.attributes['cluster_config']['APP_DATACENTER']
+        self.docker_registry =  self.app_docker_registry
         self.resource_group_prefix = self.attributes['cluster_config']['RESOURCE_GROUP_PREFIX']
         self.datacenter = self.attributes['datacenter']
         self.attributes['commit'] = self._get_git_commit()
@@ -80,7 +80,7 @@ class Image(object):
 
             run("az login -u {} -p {} --tenant {} --service-principal".format(os.environ['AZURE_CLIENT_ID'], os.environ['AZURE_CLIENT_SECRET'],
                                                                               os.environ['AZURE_TENANT_ID']))
-            run("az acr login --name joaraacr{}".format(self.datacenter))
+            run("az acr login --name {}acr{}".format(self.resource_group_prefix,self.datacenter))
         else:
             logs = "### Please update your azure credentials under culsters.ini or to environment variables ###, "
             self.logger.error(logs)
@@ -91,7 +91,7 @@ class Image(object):
 
             self.attributes['fqdi'] = "{registry}/{user}/{image}:{version}".format(
                 registry=self.attributes['cluster_config'][
-                    'JOARA_APP_DOCKER_REGISTRY'],
+                    'APP_DOCKER_REGISTRY'],
                 user=self.attributes['user'],
                 image=self.attributes['image'],
                 version=self.attributes['version']
@@ -121,7 +121,7 @@ class Image(object):
         imagedic['version'] = self.attributes['version']
         imagedic['branch'] = self._get_git_branch()
         imagedic['commit'] = '{}'.format(self.attributes['commit'])
-        imagedic['environment'] = self.attributes['cluster_config']['JOARA_APP_DATACENTER']
+        imagedic['environment'] = self.attributes['cluster_config']['APP_DATACENTER']
         imagedic['build_hostname'] = socket.gethostname()
         imagedic['build_ip_address'] = self._get_ip_address()
 
@@ -146,7 +146,7 @@ class Image(object):
         currentimagedic['version'] = localimagedic['version']
         currentimagedic['branch'] = localimagedic['branch']
         currentimagedic['commit'] = localimagedic['commit']
-        currentimagedic['environment'] = self.attributes['cluster_config']['JOARA_APP_DATACENTER']
+        currentimagedic['environment'] = self.attributes['cluster_config']['APP_DATACENTER']
         currentimagedic['build_hostname'] = localimagedic['build_hostname']
         currentimagedic['build_ip_address'] = localimagedic['build_ip_address']
 
@@ -173,7 +173,7 @@ class Image(object):
         getoutput(cmd)
 
     def _get_git_commit(self):
-        git_dir = os.path.join(self.joara_app_main)
+        git_dir = os.path.join(self.app_main)
         repo = Repo(git_dir)
         try:
             commitid = repo.head.reference.commit.hexsha
@@ -183,7 +183,7 @@ class Image(object):
         return commit
 
     def _get_git_branch(self):
-        git_dir = os.path.join(self.joara_app_main)
+        git_dir = os.path.join(self.app_main)
         repo = Repo(git_dir)
         try:
             branch = repo.active_branch
@@ -212,7 +212,7 @@ class Image(object):
 
     def _get_tags_v2(self):
         try:
-            response = self.getoutput("az acr repository show-tags --name joaraacr{datacenter} --repository {datacenter}/{image}  -o json".format(datacenter=self.attributes['cluster_config']['JOARA_APP_DATACENTER'],image=self.attributes['image']))
+            response = self.getoutput("az acr repository show-tags --name joaraacr{datacenter} --repository {datacenter}/{image}  -o json".format(datacenter=self.attributes['cluster_config']['APP_DATACENTER'],image=self.attributes['image']))
             response=json.loads(response)
             return response
         except Exception as err:
@@ -241,7 +241,7 @@ class Image(object):
             docker_registry = "{registry}/{user}/{image}:{v}".format(
                 v=str(v),
                 registry=self.attributes['cluster_config'][
-                    'JOARA_APP_DOCKER_REGISTRY'],
+                    'APP_DOCKER_REGISTRY'],
                 user=self.attributes['user'],
                 image=self.attributes['image']
             )

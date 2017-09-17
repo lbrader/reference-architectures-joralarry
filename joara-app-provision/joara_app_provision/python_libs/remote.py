@@ -10,7 +10,7 @@ class sshclient(object):
     client = None
 
     def __init__(self, address, username):
-        self.logger = logging.get_joara_logger(self.__class__.__name__)
+        self.logger = logging.get_logger(self.__class__.__name__)
         self.logger.info("### Connecting to server. ###".format(self))
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())

@@ -16,6 +16,7 @@ from . import remote
 import zipfile
 from ..log import logging
 from ..invoke_libs.kube import KubeApi
+from ..invoke_libs.git import GitHubApi
 import yaml
 from ..invoke_libs.image import Image
 from ..invoke_libs.sync.copy_docker import CopyDocker
@@ -27,19 +28,17 @@ import shutil
 class Context(object):
     def __init__(self, **kwargs):
         self.__dict__ = kwargs
-        self.logger = logging.get_joara_logger(self.__class__.__name__)
+        self.logger = logging.get_logger(self.__class__.__name__)
         self.file = os.path.abspath(self.file)
         self.script = os.path.basename(self.file)
         self.cluster_config = get_cluster_config(self.datacenter)
         self.__dict__.update({
             'project_name': self.file.split(os.sep)[-2],
             'project_path': os.path.dirname(self.file),
-            'joara_app_datacenter': self.datacenter,
-            'joara_app_main': kwargs.get('joara_app_main', self.cluster_config['JOARA_APP_MAIN']),
-            'joara_app_latest': self.cluster_config['JOARA_APP_LATEST'],
-            'vault_password': self.cluster_config['VAULT_PASSWORD'],
+            'app_datacenter': self.datacenter,
+            'app_main': kwargs.get('app_main', self.cluster_config['APP_MAIN']),
             'users_path_exists': False,
-            'joara_app_docker_registry': self.cluster_config['JOARA_APP_DOCKER_REGISTRY'],
+            'app_docker_registry': "{}acr{}.azurecr.io".format(self.cluster_config['RESOURCE_GROUP_PREFIX'],self.datacenter),
             "datacenter": self.datacenter
         })
 
@@ -68,7 +67,7 @@ class Context(object):
 
         if 'SSH_KEY_FILE' in self.cluster_config:
             self.__dict__.update({
-                'ssh_key_file': "{}{}".format(self.joara_app_main, self.cluster_config['SSH_KEY_FILE'])})
+                'ssh_key_file': "{}{}".format(self.app_main, self.cluster_config['SSH_KEY_FILE'])})
         else:
             self.__dict__.update({
                 'ssh_key_file': ""})
@@ -76,12 +75,11 @@ class Context(object):
         self.__dict__.update({
             'resource_group_prefix': self.cluster_config['RESOURCE_GROUP_PREFIX'],
             'location': self.cluster_config['LOCATION'],
-            'user': self.cluster_config['USER']})
+            'user': self.datacenter})
 
-        os.environ['JOARA_APP_LATEST'] = self.cluster_config['JOARA_APP_LATEST']
-        os.environ['JOARA_RESOURCE_GROUP_PREFIX'] = self.resource_group_prefix
+        os.environ['RESOURCE_GROUP_PREFIX'] = self.resource_group_prefix
 
-        self.logger.info("joara_app_datacenter: {0.joara_app_datacenter} ".format(self))
+        self.logger.info("app_datacenter: {0.app_datacenter} ".format(self))
         self.resource_group = "{}-{}".format(self.resource_group_prefix, self.datacenter)
 
         validate_ssh_key(self.ssh_key_file)
@@ -116,7 +114,7 @@ class Context(object):
         self.cd(directory)
         self.run('./run --datacenter ' + self.datacenter + ' ' + run_args)
 
-    def cd(self, directory, fg='green'):
+    def cd(self, directory):
         while True:
             prev = directory
             directory = directory.format(self)
@@ -147,21 +145,23 @@ class Context(object):
             self.logger.debug(cmd)
         check_call(cmd, shell=True)
 
-    def configure(self):
+
+
+    def configure_jenkins(self):
         try:
             if self.group == "jenkins":
-                self.sshclient = remote.sshclient("joara-release-jenkins.{location}.cloudapp.azure.com".format(
-                    location=self.regionmap[self.location]), "joarajenkins")
+                self.sshclient = remote.sshclient("{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,
+                    location=self.regionmap[self.location]), "{}jenkins".format(self.resource_group_prefix))
 
                 self.sshclient.zip(
-                    os.path.join(self.joara_app_main, "infrastructure", "configure", "jenkins", "ansible-jenkins"),
+                    os.path.join(self.app_main, "infrastructure", "configure", "jenkins", "ansible-jenkins"),
                     "ansible-jenkins")
 
                 self.sshclient.sendCommand("sudo rm -rf /tmp/*")
                 self.sshclient.sendCommand("ls -la /tmp/")
                 self.sshclient.copyFile("ansible-jenkins.zip")
                 self.sshclient.copyFile(
-                    os.path.join(self.joara_app_main, "infrastructure", "configure", "jenkins", "configure.sh"))
+                    os.path.join(self.app_main, "infrastructure", "configure", "jenkins", "configure.sh"))
                 self.sshclient.sendCommand("ls -la /tmp/")
                 # self.sshclient.sendCommand("eval \"$(ps aux | grep -ie configure.sh  | awk '{print \"kill -9 \" $2}')\"")
                 self.logger.info("Started configuring jenkins ")
@@ -177,8 +177,8 @@ class Context(object):
 
 
             if self.group == "pre-jenkins":
-                self.sshclient = remote.sshclient("joara-release-jenkins.{location}.cloudapp.azure.com".format(
-                    location=self.regionmap[self.location]), "joarajenkins")
+                self.sshclient = remote.sshclient("{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,
+                    location=self.regionmap[self.location]), "{}jenkins".format(self.resource_group_prefix))
                 self.logger.info("Getting Jenkins admin credentials ")
                 self.sshclient.sendCommand("sudo cat /var/lib/jenkins/secrets/initialAdminPassword")
                 self.logger.info("Please use the above credentials for configuring jenkins ")
@@ -191,7 +191,7 @@ class Context(object):
 
         # Dict that maps keys of CloudCenter's region names to values of Azure's region names.
         # Used below to control where something is deployed
-        self.logger.info("Starting the deployment: {0.joara_app_datacenter} ... ".format(self))
+        self.logger.info("Starting the deployment: {0.app_datacenter} ... ".format(self))
 
         try:
             self.client.resource_groups.create_or_update(
@@ -225,6 +225,8 @@ class Context(object):
 
         attributes = {
             "datacenter": self.datacenter,
+            "resourcegroup": self.resource_group_prefix,
+            "location": self.regionmap[self.location],
             "client_id": self.client_id,
             "client_secret": self.client_secret
         }
@@ -249,7 +251,7 @@ class Context(object):
         try:
             deployment_async_operation = self.client.deployments.create_or_update(
                 self.resource_group,
-                'joara-resource',
+                '{}-resource'.format(self.resource_group_prefix),
                 deployment_properties
             )
 
@@ -265,11 +267,11 @@ class Context(object):
             self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
 
-        self.logger.info("Completed the deployment: {0.joara_app_datacenter} ... ".format(self))
+        self.logger.info("Completed the deployment: {0.app_datacenter} ... ".format(self))
 
     def destroy(self):
         """Destroy the given resource group"""
-        self.logger.info("Deleting resource group: {0.joara_app_datacenter} ... ".format(self))
+        self.logger.info("Deleting resource group: {0.app_datacenter} ... ".format(self))
         try:
             self.client.resource_groups.delete(self.resource_group)
         except CloudError as err:
@@ -279,7 +281,7 @@ class Context(object):
             self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
 
-        self.logger.info("Completed deleting: {0.joara_app_datacenter} ... ".format(self))
+        self.logger.info("Completed deleting: {0.app_datacenter} ... ".format(self))
 
     def sync_action(self, config_dict, args):
         attrs = {}
@@ -289,6 +291,24 @@ class Context(object):
         copy = CopyDocker(datancenter=self.datacenter, **attrs)
         if args.task == "copy":
             copy.copy()
+
+    def configure_git(self, args):
+       jenkins_host= "{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.regionmap[self.location])
+       self.__dict__.update({
+           'jenkins_host': jenkins_host,
+           'image': args.image})
+
+       git = GitHubApi( **self.__dict__)
+       if args.task == "repo":
+            git.create_repo(args.image,os.getcwd())
+       elif args.task == "deleterepo":
+           git.delete_repo(args.image)
+       elif args.task == "orghook":
+           git.create_org_hook()
+       elif args.task == "repohook":
+           git.create_repo_hook(args.image)
+       elif args.task == "protect":
+           git.set_protection(args.image)
 
     def image_action(self, config_dict, args):
         attrs = {}
@@ -339,7 +359,7 @@ class Context(object):
     #         if x == 'joara-main':
     #             include = True
     #     self.app_project_path = '{}{}'.format(
-    #         self.joara_app_main, self.app_project_path)
+    #         self.app_main, self.app_project_path)
 
     def _app_project_path(self):
         xs = self.project_path.split(os.sep)
@@ -347,8 +367,7 @@ class Context(object):
         include = False
         for x in xs:
             if include:
-                self.app_project_path = '{}/{}'.format(
-                    self.app_project_path, x)
+                self.app_project_path = os.path.join(self.app_project_path, x)
             if 'joara-main' in x:
                 include = True
 
@@ -358,7 +377,7 @@ class Context(object):
             self.app_project_path = self.app_project_path.lstrip(os.path.sep)
 
         self.logger.info("project path: {}".format(self.app_project_path))
-        self.app_project_path = os.path.join(self.joara_app_main, self.app_project_path)
+        self.app_project_path = os.path.join(self.app_main, self.app_project_path)
         self.logger.info("Absolute project path: {} ".format(self.app_project_path))
 
     def cd_project(self):
@@ -366,7 +385,7 @@ class Context(object):
 
 
     def get_temp_dir(self):
-        temp_dir = os.path.join(tempfile.gettempdir())
+        temp_dir = os.path.join(tempfile.gettempdir(), '.{}'.format(hash(os.times())))
         return temp_dir
 
     def copy_sub_project(self, sub_project):
@@ -385,6 +404,7 @@ class Context(object):
         self.cd(os.path.join(temp_dir, self.project_name))
 
     def copy_and_overwrite(self, from_path, to_path):
+        shutil.rmtree(to_path, ignore_errors=True)
         if os.path.exists(to_path):
             shutil.rmtree(to_path, ignore_errors=True)
         shutil.copytree(from_path, to_path)

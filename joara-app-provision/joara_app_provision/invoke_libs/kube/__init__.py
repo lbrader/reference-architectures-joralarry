@@ -21,19 +21,19 @@ except ImportError:
 class KubeApi(object):
 
     def __init__(self, datacenter, **kwargs):
-        self.logger = logging.get_joara_logger(self.__class__.__name__)
+        self.logger = logging.get_logger(self.__class__.__name__)
         self.datacenter = datacenter
         self.image = kwargs['image']
         img = Image(deploy=True, **kwargs)
         self.version = img.current_version()
-        user= kwargs["cluster_config"]["JOARA_APP_DOCKER_USER"]
+        user= kwargs["cluster_config"]["APP_DATACENTER"]
 
         try:
 
             os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
             run(
-                "scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa joaraacs{datacenter}@jora-acs-mgmt-{datacenter}.eastus.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
-                    user=os.path.expanduser("~"), datacenter=self.datacenter))
+                "scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {user}/.ssh/id_rsa joaraacs{datacenter}@jora-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com:.kube/config {user}/.kube/config".format(
+                    location=self.regionmap[self.location],user=os.path.expanduser("~"), datacenter=self.datacenter))
             self.logger.info("Copied kube config from acs remote server")
             config.load_kube_config()
             self.apiclient = api_client.ApiClient()
@@ -49,7 +49,7 @@ class KubeApi(object):
             "user": user,
             "replicas": kwargs['count'] if int(kwargs['count']) > 1 else self._getreplica(),
             "name": self.image,
-            "registry": kwargs["cluster_config"]["JOARA_APP_DOCKER_REGISTRY"],
+            "registry": kwargs["cluster_config"]["APP_DOCKER_REGISTRY"],
             "deploy_app": deployment_app,
             "service_app": service_app
         }
