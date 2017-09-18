@@ -16,7 +16,7 @@
 
 1. Install miniconda Python3.6 https://conda.io/miniconda.html
 
-[larry] installs but I don't see the conda command.
+This will create a Command line window called "Anaconda" prompt
 
 ```shell
 2. cmd> conda  create -n vjoaraapp3 python
