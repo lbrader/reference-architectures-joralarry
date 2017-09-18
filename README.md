@@ -1,6 +1,5 @@
 # JOARA
 
-
 ## Code Details
 
 1. **Infrastructure** - Provisiong of Infrastructure ARM templates, configuring jenkins and docker images
@@ -16,6 +15,8 @@
 ### Usage in Windows
 
 1. Install miniconda Python3.6 https://conda.io/miniconda.html
+
+[larry] installs but I don't see the conda command.
 
 ```shell
 2. cmd> conda  create -n vjoaraapp3 python
@@ -97,7 +98,7 @@ Configure Jenkins
 > joara gitconfigure --group git --image anodejs --task all --verbose
 ```
 
-### Docker Image Operations - (only from Linux with docker)
+### Docker Image Opereations - (only from Linux with docker)
 
 
 Datacenter = dev/test/prod
