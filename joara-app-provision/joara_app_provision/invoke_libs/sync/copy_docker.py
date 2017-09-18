@@ -4,6 +4,7 @@ import os
 import sys
 import json
 from ...invoke_libs.version_manager import VersionManager
+from ...invoke_libs import Attributes
 import traceback
 from azure.mgmt.storage import StorageManagementClient
 from azure.common.credentials import ServicePrincipalCredentials
@@ -255,11 +256,3 @@ class CopyDocker(object):
         self.logger.info('All copy and deploy steps completed for image {}'.format(image))
         return_dict[image] = 'completed'
 
-
-class Attributes(object):
-    def __init__(self, *initial_data, **kwargs):
-        for dictionary in initial_data:
-            for key in dictionary:
-                setattr(self, key, dictionary[key])
-        for key in kwargs:
-            setattr(self, key, kwargs[key])

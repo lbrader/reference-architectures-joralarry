@@ -8,6 +8,8 @@ import sys
 import subprocess
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.resource.subscriptions.subscription_client import SubscriptionClient
+from azure.cli.core._profile import Profile
 from azure.mgmt.resource.resources.models import DeploymentMode
 from msrestazure.azure_exceptions import CloudError
 from ..invoke_libs import render
@@ -23,7 +25,7 @@ from ..invoke_libs.sync.copy_docker import CopyDocker
 from ..invoke_libs.validators import validate_ssh_key
 import tempfile
 import shutil
-
+import re
 
 class Context(object):
     def __init__(self, **kwargs):
@@ -82,24 +84,52 @@ class Context(object):
         self.logger.info("app_datacenter: {0.app_datacenter} ".format(self))
         self.resource_group = "{}-{}".format(self.resource_group_prefix, self.datacenter)
 
-        validate_ssh_key(self.ssh_key_file)
+
         self.credentials = ServicePrincipalCredentials(
             client_id=self.client_id,
             secret=self.client_secret,
             tenant=self.tenant_id
         )
 
-        self.regionmap = {
-            "us-west": "westus",
-            "us-southcentral": "southcentralus",
-            "us-east": "eastus"
-        }
+        if not self._checkazurelocation(self.location):
+            self.logger.error("Exception: Specified location {0} not exit under your subscription".format(self.location))
+            sys.exit(1)
+        else:
+            self.logger.info("Using location: {0}".format(self.location))
+
+        try:
+            profile = Profile()
+            subscriptions = profile.find_subscriptions_on_login(
+                False,
+                self.client_id,
+                self.client_secret,
+                True,
+                self.tenant_id,
+                allow_no_subscriptions=False)
+            subscription_name = json.loads(json.dumps(profile.get_subscription(self.subscription_id)))["name"]
+            self.subscription_name =  re.sub('\W+', '', subscription_name).lower()
+        except Exception as err:
+            self.logger.error("Exception: Unable to get subscription details for the credentials provided {0}".format(err))
+            sys.exit(1)
+
+        validate_ssh_key(self.ssh_key_file)
 
         self.client = ResourceManagementClient(self.credentials, self.subscription_id)
 
         if os.path.exists('/Users'):
             self.users_path_exists = True
         self._app_project_path()
+
+    def _checkazurelocation(self,name):
+        try:
+            result = list(SubscriptionClient(self.credentials).subscriptions.list_locations(self.subscription_id))
+            for l in result:
+                if name == l.name:
+                    return True
+            return False
+        except Exception as err:
+            self.logger.error("Exception: Unable to azure locations {0}".format(err))
+            sys.exit(1)
 
     def __str__(self):
         result = ''
@@ -151,7 +181,7 @@ class Context(object):
         try:
             if self.group == "jenkins":
                 self.sshclient = remote.sshclient("{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,
-                    location=self.regionmap[self.location]), "{}jenkins".format(self.resource_group_prefix))
+                    location=self.location), "{}jenkins".format(self.resource_group_prefix))
 
                 self.sshclient.zip(
                     os.path.join(self.app_main, "infrastructure", "configure", "jenkins", "ansible-jenkins"),
@@ -178,7 +208,7 @@ class Context(object):
 
             if self.group == "pre-jenkins":
                 self.sshclient = remote.sshclient("{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,
-                    location=self.regionmap[self.location]), "{}jenkins".format(self.resource_group_prefix))
+                    location=self.location), "{}jenkins".format(self.resource_group_prefix))
                 self.logger.info("Getting Jenkins admin credentials ")
                 self.sshclient.sendCommand("sudo cat /var/lib/jenkins/secrets/initialAdminPassword")
                 self.logger.info("Please use the above credentials for configuring jenkins ")
@@ -197,7 +227,7 @@ class Context(object):
             self.client.resource_groups.create_or_update(
                 self.resource_group,
                 {
-                    'location': self.regionmap[self.location]
+                    'location': self.location
                 }
             )
         except CloudError as err:
@@ -226,7 +256,7 @@ class Context(object):
         attributes = {
             "datacenter": self.datacenter,
             "resourcegroup": self.resource_group_prefix,
-            "location": self.regionmap[self.location],
+            "location": self.location,
             "client_id": self.client_id,
             "client_secret": self.client_secret
         }
@@ -288,11 +318,11 @@ class Context(object):
         cluster_config = get_cluster_config(self.datacenter)
         attrs['cluster_config'] = cluster_config
         attrs['app_docker_registry'] = self.app_docker_registry
-        attrs['location'] = self.regionmap[self.location]
+        attrs['location'] = self.location
         attrs.update(config_dict)
         os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
         self.sshclient = remote.sshclient("{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com".format(
-            resourcegroup=self.resource_group_prefix, location=self.regionmap[self.location],
+            resourcegroup=self.resource_group_prefix, location=self.location,
             datacenter=self.datacenter), "{resourcegroup}acs{datacenter}".format(
             resourcegroup=self.resource_group_prefix, datacenter=self.datacenter))
         self.sshclient.copyFileFrom(".kube/config", "{user}/.kube/config".format(user=os.path.expanduser("~")))
@@ -302,7 +332,7 @@ class Context(object):
             copy.copy()
 
     def configure_git(self, args):
-       jenkins_host= "{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.regionmap[self.location])
+       jenkins_host= "{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.location)
        self.__dict__.update({
            'jenkins_host': jenkins_host,
            'image': args.image})
@@ -330,12 +360,12 @@ class Context(object):
         cluster_config = get_cluster_config(self.datacenter)
         attrs['cluster_config'] = cluster_config
         attrs['app_docker_registry'] =self.app_docker_registry
-        attrs['location'] = self.regionmap[self.location]
+        attrs['location'] = self.location
         attrs.update(config_dict)
 
         if args.task in ["deploy", "scale", "patch", "get", "getservice", "delete"]:
             os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
-            self.sshclient = remote.sshclient("{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.regionmap[self.location],datacenter=self.datacenter), "{resourcegroup}acs{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter))
+            self.sshclient = remote.sshclient("{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.location,datacenter=self.datacenter), "{resourcegroup}acs{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter))
             self.sshclient.copyFileFrom(".kube/config","{user}/.kube/config".format(user=os.path.expanduser("~")))
             self.logger.info("Copied kube config from acs remote server")
             kube = KubeApi(datacenter=self.datacenter, **attrs)

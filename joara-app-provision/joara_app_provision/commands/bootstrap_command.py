@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function, division
 from ..commands import from_base
 from ..log import logging
+from ..invoke_libs import Attributes
 logger = logging.get_logger(__name__)
 
 def bootstrap_add_subcommand(parser):
@@ -50,10 +51,3 @@ def bootstrap_subcommand(args):
         logger.warn("Action on datacenter:{datacenter} and group:{group} is not valid".format(datacenter=args.datacenter,group=args.group))
 
 
-class Attributes(object):
-    def __init__(self, *initial_data, **kwargs):
-        for dictionary in initial_data:
-            for key in dictionary:
-                setattr(self, key, dictionary[key])
-        for key in kwargs:
-            setattr(self, key, kwargs[key])
