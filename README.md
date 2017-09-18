@@ -11,8 +11,9 @@
 6. **joara-app-provision** - Joara CLI
 
 
+## Pre-Setup Machine
 
-## Usage in Windows
+### Usage in Windows
 
 1. Install miniconda Python3.6 https://conda.io/miniconda.html
 
@@ -21,10 +22,8 @@
 3. cmd> activate vjoaraapp3
 ```
 
+### Usage in Linux
 
-## Usage in Linux
-
-### Pre-Setup Machine
 
 ```shell
 > wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
