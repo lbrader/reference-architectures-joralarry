@@ -97,7 +97,7 @@ Configure Jenkins
 > joara gitconfigure --group git --image anodejs --task all --verbose
 ```
 
-### Docker Image Opereations - (only from Linux with docker)
+### Docker Image Operations - (only from Linux with docker)
 
 
 Datacenter = dev/test/prod
