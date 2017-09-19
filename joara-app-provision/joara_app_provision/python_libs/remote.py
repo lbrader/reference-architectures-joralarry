@@ -17,20 +17,23 @@ class sshclient(object):
         self.client.connect(address, username=username, key_filename='{user}/.ssh/id_rsa'.format(user=os.path.expanduser("~")))
 
     def sendCommand(self, command):
-        if(self.client):
-            stdin, stdout, stderr = self.client.exec_command(command)
-            while not stdout.channel.exit_status_ready():
-                if stdout.channel.recv_ready():
-                    alldata = stdout.channel.recv(1024)
-                    prevdata = b"1"
-                    while prevdata:
-                        prevdata = stdout.channel.recv(1024)
-                        alldata += prevdata
+        try:
+            if(self.client):
+                stdin, stdout, stderr = self.client.exec_command(command)
+                while not stdout.channel.exit_status_ready():
+                    if stdout.channel.recv_ready():
+                        alldata = stdout.channel.recv(1024)
+                        prevdata = b"1"
+                        while prevdata:
+                            prevdata = stdout.channel.recv(1024)
+                            alldata += prevdata
 
-                    self.logger.info(str(alldata, "utf8"))
-                    return str(alldata, "utf8")
-        else:
-            self.logger.info("Connection not opened.".format(self))
+                        self.logger.info(str(alldata, "utf8"))
+                        return str(alldata, "utf8")
+            else:
+                self.logger.info("Connection not opened.".format(self))
+        except Exception as err:
+            self.logger.error("Exception: Ocurred when executing command in remote machine {0}".format(err))
 
     def copyFile(self,path):
         with SCPClient(self.client.get_transport()) as scp:

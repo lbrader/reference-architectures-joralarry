@@ -29,96 +29,116 @@ import re
 
 class Context(object):
     def __init__(self, **kwargs):
-        self.__dict__ = kwargs
-        self.logger = logging.get_logger(self.__class__.__name__)
-        self.file = os.path.abspath(self.file)
-        self.script = os.path.basename(self.file)
-        self.cluster_config = get_cluster_config(self.datacenter)
-        self.__dict__.update({
-            'project_name': self.file.split(os.sep)[-2],
-            'project_path': os.path.dirname(self.file),
-            'app_datacenter': self.datacenter,
-            'app_main': kwargs.get('app_main', self.cluster_config['APP_MAIN']),
-            'users_path_exists': False,
-            'app_docker_registry': "{}acr{}.azurecr.io".format(self.cluster_config['RESOURCE_GROUP_PREFIX'],self.datacenter),
-            "datacenter": self.datacenter
-        })
 
         try:
-            if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
+            self.__dict__ = kwargs
+            self.logger = logging.get_logger(self.__class__.__name__)
+            self.file = os.path.abspath(self.file)
+            self.script = os.path.basename(self.file)
+            self.cluster_config = get_cluster_config(self.datacenter)
+
+            if not 'RESOURCE_GROUP_PREFIX' in self.cluster_config or not self.cluster_config['RESOURCE_GROUP_PREFIX']:
+                self.logger.error("Exception: Resource group prefix can't be empty, please update RESOURCE_GROUP_PREFIX in clusters.ini file under root project directory")
+                sys.exit(1)
+
+            if len(self.cluster_config['RESOURCE_GROUP_PREFIX']) < 5:
+                self.logger.error("Exception: Length of RESOURCE_GROUP_PREFIX should be >= 5 character")
+                sys.exit(1)
+
+            self.__dict__.update({
+                'project_name': self.file.split(os.sep)[-2],
+                'project_path': os.path.dirname(self.file),
+                'app_datacenter': self.datacenter,
+                'app_main': kwargs.get('app_main', self.cluster_config['APP_MAIN']),
+                'app_docker_registry': "{}acr{}.azurecr.io".format(self.cluster_config['RESOURCE_GROUP_PREFIX'],self.datacenter),
+                "datacenter": self.datacenter
+            })
+
+            try:
+                if ('AZURE_CLIENT_ID' in os.environ and 'AZURE_CLIENT_SECRET' in os.environ and 'AZURE_TENANT_ID' in os.environ and 'AZURE_SUBSCRIPTION_ID' in os.environ):
+                    self.__dict__.update({
+                        'subscription_id': os.environ['AZURE_SUBSCRIPTION_ID'],
+                        'client_id': os.environ['AZURE_CLIENT_ID'],
+                        'client_secret': os.environ['AZURE_CLIENT_SECRET'],
+                        'tenant_id': os.environ['AZURE_TENANT_ID']})
+                else:
+                    self.__dict__.update({
+                        'subscription_id': self.cluster_config['AZURE_SUBSCRIPTION_ID'],
+                        'client_id': self.cluster_config['AZURE_CLIENT_ID'],
+                        'client_secret': self.cluster_config['AZURE_CLIENT_SECRET'],
+                        'tenant_id': self.cluster_config['AZURE_TENANT_ID']})
+
+                    os.environ['AZURE_CLIENT_ID'] = self.client_id
+                    os.environ['AZURE_CLIENT_SECRET'] = self.client_secret
+                    os.environ['AZURE_TENANT_ID'] = self.tenant_id
+                    os.environ['AZURE_SUBSCRIPTION_ID'] = self.subscription_id
+            except Exception as e:
+                logs = " Please update your azure credentials under culsters.ini or to environment variables , {}".format(e)
+                self.logger.error(logs)
+                raise RuntimeError(logs)
+
+            if 'SSH_KEY_FILE' in self.cluster_config:
                 self.__dict__.update({
-                    'subscription_id': os.environ['AZURE_SUBSCRIPTION_ID'],
-                    'client_id': os.environ['AZURE_CLIENT_ID'],
-                    'client_secret': os.environ['AZURE_CLIENT_SECRET'],
-                    'tenant_id': os.environ['AZURE_TENANT_ID']})
+                    'ssh_key_file': "{}{}".format(self.app_main, self.cluster_config['SSH_KEY_FILE'])})
             else:
                 self.__dict__.update({
-                    'subscription_id': self.cluster_config['AZURE_SUBSCRIPTION_ID'],
-                    'client_id': self.cluster_config['AZURE_CLIENT_ID'],
-                    'client_secret': self.cluster_config['AZURE_CLIENT_SECRET'],
-                    'tenant_id': self.cluster_config['AZURE_TENANT_ID']})
+                    'ssh_key_file': ""})
 
-                os.environ['AZURE_CLIENT_ID'] = self.client_id
-                os.environ['AZURE_CLIENT_SECRET'] = self.client_secret
-                os.environ['AZURE_TENANT_ID'] = self.tenant_id
-                os.environ['AZURE_SUBSCRIPTION_ID'] = self.subscription_id
-        except Exception as e:
-            logs = " Please update your azure credentials under culsters.ini or to environment variables , {}".format(e)
-            self.logger.error(logs)
-            raise RuntimeError(logs)
-
-        if 'SSH_KEY_FILE' in self.cluster_config:
             self.__dict__.update({
-                'ssh_key_file': "{}{}".format(self.app_main, self.cluster_config['SSH_KEY_FILE'])})
-        else:
-            self.__dict__.update({
-                'ssh_key_file': ""})
+                'resource_group_prefix': self.cluster_config['RESOURCE_GROUP_PREFIX'],
+                'location': self.cluster_config['LOCATION'],
+                'user': self.datacenter})
 
-        self.__dict__.update({
-            'resource_group_prefix': self.cluster_config['RESOURCE_GROUP_PREFIX'],
-            'location': self.cluster_config['LOCATION'],
-            'user': self.datacenter})
+            os.environ['RESOURCE_GROUP_PREFIX'] = self.resource_group_prefix
 
-        os.environ['RESOURCE_GROUP_PREFIX'] = self.resource_group_prefix
-
-        self.logger.info("app_datacenter: {0.app_datacenter} ".format(self))
-        self.resource_group = "{}-{}".format(self.resource_group_prefix, self.datacenter)
+            self.logger.info("app_datacenter: {0.app_datacenter} ".format(self))
+            self.resource_group = "{}-{}".format(self.resource_group_prefix, self.datacenter)
 
 
-        self.credentials = ServicePrincipalCredentials(
-            client_id=self.client_id,
-            secret=self.client_secret,
-            tenant=self.tenant_id
-        )
+            self.credentials = ServicePrincipalCredentials(
+                client_id=self.client_id,
+                secret=self.client_secret,
+                tenant=self.tenant_id
+            )
 
-        if not self._checkazurelocation(self.location):
-            self.logger.error("Exception: Specified location {0} not exit under your subscription".format(self.location))
-            sys.exit(1)
-        else:
-            self.logger.info("Using location: {0}".format(self.location))
+            supported_regions = ["eastus", "westcentralus"]
+            if not self.location in supported_regions:
+                self.logger.error("Exception: Service not exist in the specified location {0}".format(self.location))
+                self.logger.warn("Supported locations {0}".format(str(supported_regions)))
+                sys.exit(1)
+            else:
+                self.logger.info("Using location: {0}".format(self.location))
 
-        try:
-            profile = Profile()
-            subscriptions = profile.find_subscriptions_on_login(
-                False,
-                self.client_id,
-                self.client_secret,
-                True,
-                self.tenant_id,
-                allow_no_subscriptions=False)
-            subscription_name = json.loads(json.dumps(profile.get_subscription(self.subscription_id)))["name"]
-            self.subscription_name =  re.sub('\W+', '', subscription_name).lower()
+            if not self._checkazurelocation(self.location):
+                self.logger.error("Exception: Specified location {0} not exit under your subscription".format(self.location))
+                sys.exit(1)
+            else:
+                self.logger.info("Using location: {0}".format(self.location))
+
+            try:
+                profile = Profile()
+                subscriptions = profile.find_subscriptions_on_login(
+                    False,
+                    self.client_id,
+                    self.client_secret,
+                    True,
+                    self.tenant_id,
+                    allow_no_subscriptions=False)
+                subscription_name = json.loads(json.dumps(profile.get_subscription(self.subscription_id)))["name"]
+                self.subscription_name =  re.sub('\W+', '', subscription_name).lower()
+            except Exception as err:
+                self.logger.error("Exception: Unable to get subscription details for the credentials provided {0}".format(err))
+                sys.exit(1)
+
+            validate_ssh_key(self.ssh_key_file)
+
+            self.client = ResourceManagementClient(self.credentials, self.subscription_id)
+
+            self._app_project_path()
+
         except Exception as err:
-            self.logger.error("Exception: Unable to get subscription details for the credentials provided {0}".format(err))
+            self.logger.error("Exception: In Initializing the context {0}".format(err))
             sys.exit(1)
-
-        validate_ssh_key(self.ssh_key_file)
-
-        self.client = ResourceManagementClient(self.credentials, self.subscription_id)
-
-        if os.path.exists('/Users'):
-            self.users_path_exists = True
-        self._app_project_path()
 
     def _checkazurelocation(self,name):
         try:
@@ -193,11 +213,10 @@ class Context(object):
                 self.sshclient.copyFile(
                     os.path.join(self.app_main, "infrastructure", "configure", "jenkins", "configure.sh"))
                 self.sshclient.sendCommand("ls -la /tmp/")
-                # self.sshclient.sendCommand("eval \"$(ps aux | grep -ie configure.sh  | awk '{print \"kill -9 \" $2}')\"")
                 self.logger.info("Started configuring jenkins ")
                 log_output = self.sshclient.sendCommand("chmod +x /tmp/configure.sh ; cd /tmp/ ; ./configure.sh ")
 
-                if "Completed Configure Jenkins" in log_output:
+                if log_output and "Completed Configure Jenkins" in log_output:
                     self.logger.info("Completed configuring jenkins ")
                 else:
                     self.logger.exception("Error in jenkins configuration,Please refer logs")
