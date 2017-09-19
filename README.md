@@ -1,6 +1,5 @@
 # JOARA
 
-
 ## Code Details
 
 1. **Infrastructure** - Provisiong of Infrastructure ARM templates, configuring jenkins and docker images
@@ -16,6 +15,8 @@
 ### Usage in Windows
 
 1. Install miniconda Python3.6 https://conda.io/miniconda.html
+
+This will create a Command line window called "Anaconda" prompt
 
 ```shell
 2. cmd> conda  create -n vjoaraapp3 python
@@ -76,7 +77,7 @@
 
 ### Configuring Jenkins
 
-Get Jenkins Credentials and use it in the UI
+Get Jenkins Credentials to log into the Jenkins Web Console
 ```shell
 > joara -d jenkins jenkinsconfigure --group pre-jenkins --verbose
 ```
