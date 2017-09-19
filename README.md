@@ -43,7 +43,7 @@ This will create a Command line window called "Anaconda" prompt
 > pip install --editable joara-app-provision
 ```
 
-**_Azure credentials and others details can be configured in _cluster.ini_ file_**
+## Azure and GitHub credentials and others details can be configured in ***cluster.ini*** file
 
 ## JOARA COMMANDS
 
