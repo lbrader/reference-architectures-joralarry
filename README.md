@@ -98,31 +98,6 @@ Configure Jenkins
 > joara gitconfigure --group git --image anodejs --task all --verbose
 ```
 
-### Docker Image Opereations - (only from Linux with docker)
-
-
-Datacenter = dev/test/prod
-
-#### To Build Docker
-
-
-```shell
-> joara -d {datacenter} image --images nodejso --task build --verbose
-```
-
-#### To Push Docker
-
-```shell
-> joara -d {datacenter} image --images nodejso --task push --verbose
-```
-
-#### To Deploy Docker
-
-```shell
-> joara -d {datacenter} image --images nodejso --task deploy --count 1 --verbose
-```
-
-
 ### Get ACS Details
 
 To Get IP of the service where it is running, Datacenter = dev/test/prod
