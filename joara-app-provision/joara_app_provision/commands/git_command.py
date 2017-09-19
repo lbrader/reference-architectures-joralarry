@@ -1,6 +1,5 @@
 from __future__ import absolute_import, print_function, division
 from ..commands import from_base
-from ..invoke_libs import Attributes
 from ..log import logging
 
 logger = logging.get_logger(__name__)
@@ -47,14 +46,7 @@ def git_add_subcommand(parser):
 def git_subcommand(args):
     if 'git' in args.group:
         if args.image:
-            if args.task == "all":
-                tasks = ['repo', 'protect', 'repohook']
-                for task in tasks:
-                    args = Attributes(
-                        {'group': args.group,  "image": args.image,  "task": task,  "datacenter": args.datacenter})
-                    from_base.configure_git(args)
-            else:
-                from_base.configure_git(args)
+            from_base.configure_git(args)
         else:
             logger.warn("Please provide a image name to configure in git")
 

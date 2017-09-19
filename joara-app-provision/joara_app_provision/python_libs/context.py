@@ -348,6 +348,10 @@ class Context(object):
            git.create_repo_hook(args.image)
        elif args.task == "protect":
            git.set_protection(args.image)
+       elif args.task == "all":
+           git.create_repo(args.image, os.getcwd())
+           git.create_repo_hook(args.image)
+           #git.set_protection(args.image)
 
     def image_action(self, config_dict, args):
         attrs = {}
@@ -395,18 +399,6 @@ class Context(object):
         else:
             self.logger.error("No task exist")
 
-    # def _app_project_path(self):
-    #     xs = self.project_path.split(os.sep)
-    #     self.app_project_path = ''
-    #     include = False
-    #     for x in xs:
-    #         if include:
-    #             self.app_project_path = '{}/{}'.format(
-    #                 self.app_project_path, x)
-    #         if x == 'joara-main':
-    #             include = True
-    #     self.app_project_path = '{}{}'.format(
-    #         self.app_main, self.app_project_path)
 
     def _app_project_path(self):
         xs = self.project_path.split(os.sep)
