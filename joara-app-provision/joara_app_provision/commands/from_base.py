@@ -85,6 +85,7 @@ def configure_git(args):
     )
     context.copy_project()
     context.configure_git(args)
+    os.chdir(app_main)
 
 
 

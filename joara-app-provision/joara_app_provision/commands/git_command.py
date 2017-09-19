@@ -51,7 +51,7 @@ def git_subcommand(args):
                 tasks = ['repo', 'protect', 'repohook']
                 for task in tasks:
                     args = Attributes(
-                        {'group': args.group,  "image": args.image,  "task": task})
+                        {'group': args.group,  "image": args.image,  "task": task,  "datacenter": args.datacenter})
                     from_base.configure_git(args)
             else:
                 from_base.configure_git(args)
