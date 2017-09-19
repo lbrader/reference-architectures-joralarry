@@ -77,7 +77,7 @@ This will create a Command line window called "Anaconda" prompt
 
 ### Configuring Jenkins
 
-Get Jenkins Credentials and use it in the UI
+Get Jenkins Credentials to log into the Jenkins Web Console
 ```shell
 > joara -d jenkins jenkinsconfigure --group pre-jenkins --verbose
 ```
