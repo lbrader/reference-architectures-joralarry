@@ -43,7 +43,7 @@ This will create a Command line window called "Anaconda" prompt
 > pip install --editable joara-app-provision
 ```
 
-**_Azure credentials and others details can be configured in _cluster.ini_ file_**
+## Azure and GitHub credentials and others details can be configured in ***cluster.ini*** file
 
 ## JOARA COMMANDS
 
@@ -95,33 +95,11 @@ Configure Jenkins
 3. Creates Hook for the repo
 
 ```shell
+> joara gitconfigure --group git --image madnodejs --task repo --verbose
+> joara gitconfigure --group git --image madnodejs --task repohook --verbose
+or to do both in a single step
 > joara gitconfigure --group git --image anodejs --task all --verbose
 ```
-
-### Docker Image Opereations - (only from Linux with docker)
-
-
-Datacenter = dev/test/prod
-
-#### To Build Docker
-
-
-```shell
-> joara -d {datacenter} image --images nodejso --task build --verbose
-```
-
-#### To Push Docker
-
-```shell
-> joara -d {datacenter} image --images nodejso --task push --verbose
-```
-
-#### To Deploy Docker
-
-```shell
-> joara -d {datacenter} image --images nodejso --task deploy --count 1 --verbose
-```
-
 
 ### Get ACS Details
 
