@@ -95,8 +95,8 @@ Configure Jenkins
 3. Creates Hook for the repo
 
 ```shell
-> joara gitconfigure --group git --image madnodejs --task repo --verbose
-> joara gitconfigure --group git --image madnodejs --task repohook --verbose
+> joara gitconfigure --group git --image anodejs --task repo --verbose
+> joara gitconfigure --group git --image anodejs --task repohook --verbose
 or to do both in a single step
 > joara gitconfigure --group git --image anodejs --task all --verbose
 ```
