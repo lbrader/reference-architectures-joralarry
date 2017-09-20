@@ -14,7 +14,7 @@ class sshclient(object):
         self.logger.info("Connecting to server.".format(self))
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
-        self.client.connect(address, username=username, key_filename='{user}/.ssh/id_rsa'.format(user=os.path.expanduser("~")))
+        self.client.connect(address, username=username,key_filename=os.path.join(os.path.expanduser("~"), ".ssh", "id_rsa"))
 
     def sendCommand(self, command):
         try:

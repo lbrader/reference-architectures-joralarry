@@ -14,11 +14,13 @@ def provision_images(module, images,  args):
     run_file = os.path.join(app_main, module)
     context = Context(file=run_file, task=args.task,  datacenter=args.datacenter)
     for image in images:
-        context.copy_sub_project(image)
+        if args.task in ["build", "push", "deploy", "all"]:
+            context.copy_sub_project(image)
         attributes = {
-            "count": args.count
+            "count": args.count,
+            "image": image
         }
-        context.image_action(attributes,args)
+        context.image_action(attributes,args,)
 
 
 

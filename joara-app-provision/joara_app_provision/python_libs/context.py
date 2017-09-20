@@ -281,7 +281,7 @@ class Context(object):
         }
 
         if 'sshkey' in str(parameters):
-            pub_ssh_key_path = os.path.expanduser('{user}/.ssh/id_rsa.pub'.format(user=os.path.expanduser("~")))
+            pub_ssh_key_path = os.path.join(os.path.expanduser("~"),".ssh","id_rsa.pub")
             with open(pub_ssh_key_path, 'r') as pub_ssh_file_fd:
                 sshkey = pub_ssh_file_fd.read()
                 attributes.update({
@@ -374,11 +374,13 @@ class Context(object):
 
     def image_action(self, config_dict, args):
         attrs = {}
-        with open("conf.yml", 'r') as f:
-            conf = yaml.load(f)
-        attrs.update(conf)
-        attrs['flatten'] = False
-        attrs['move'] = True
+        if args.task in ["build", "push", "deploy", "all"]:
+            with open("conf.yml", 'r') as f:
+                conf = yaml.load(f)
+            attrs.update(conf)
+            attrs['flatten'] = False
+            attrs['move'] = True
+
         attrs['task'] = args.task
         cluster_config = get_cluster_config(self.datacenter)
         attrs['cluster_config'] = cluster_config
@@ -387,9 +389,9 @@ class Context(object):
         attrs.update(config_dict)
 
         if args.task in ["deploy", "scale", "patch", "get", "getservice", "delete"]:
-            os.makedirs("{user}/.kube".format(user=os.path.expanduser("~")), exist_ok=True)
+            os.makedirs(os.path.join(os.path.expanduser("~"),".kube"), exist_ok=True)
             self.sshclient = remote.sshclient("{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.location,datacenter=self.datacenter), "{resourcegroup}acs{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter))
-            self.sshclient.copyFileFrom(".kube/config","{user}/.kube/config".format(user=os.path.expanduser("~")))
+            self.sshclient.copyFileFrom(".kube/config",os.path.join(os.path.expanduser("~"),".kube","config"))
             self.logger.info("Copied kube config from acs remote server")
             kube = KubeApi(datacenter=self.datacenter, **attrs)
         if args.task in ["build", "push"]:

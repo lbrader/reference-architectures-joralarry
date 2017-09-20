@@ -2,9 +2,9 @@ nodejso:
   branch: master
   build_hostname: h1
   build_ip_address: 127.0.0.1
-  commit: 462c30f0b409bc736aa26758b67413f1b185fadd
+  commit: 41e530cc973f690f07c97226b061b599b2d6727a
   environment: dev
   image: nodejso
-  registry: ajoaraacrdev.azurecr.io
+  registry: cjoaraacrdev.azurecr.io
   user: dev
-  version: 0.0.2
+  version: 0.0.1
