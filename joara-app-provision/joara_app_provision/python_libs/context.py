@@ -109,6 +109,7 @@ class Context(object):
             else:
                 self.logger.info("Using location: {0}".format(self.location))
 
+            self.logger.info("Using resource group: {0.resource_group_prefix}-{0.datacenter}".format(self))
             if not self._checkazurelocation(self.location):
                 self.logger.error("Exception: Specified location {0} not exit under your subscription".format(self.location))
                 sys.exit(1)

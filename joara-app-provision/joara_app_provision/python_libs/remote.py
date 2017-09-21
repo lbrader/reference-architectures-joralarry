@@ -11,7 +11,7 @@ class sshclient(object):
 
     def __init__(self, address, username):
         self.logger = logging.get_logger(self.__class__.__name__)
-        self.logger.info("Connecting to server.".format(self))
+        self.logger.info("Connecting to server {}.".format(address))
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
         self.client.connect(address, username=username,key_filename=os.path.join(os.path.expanduser("~"), ".ssh", "id_rsa"))

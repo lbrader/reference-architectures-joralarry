@@ -280,11 +280,14 @@ class Image(object):
                                    username,
                                    password):
         try:
+
             registryEndpoint = 'https://' + login_server
+            self.logger.info("Connecting to ACR: {}".format(registryEndpoint + path))
             response = requests.get(
                 registryEndpoint + path,
                 headers=self._headers(username, password)
             )
+
             if response.status_code == 200:
                 result = response.json()["tags"]
                 self.logger.info("ACR Image versions:{}".format(result))
