@@ -96,3 +96,5 @@ fi
 success_echo "Deleting logs directory"
 CMD="rm -rf logs"
 run_command "${CMD}"
+
+exit 0

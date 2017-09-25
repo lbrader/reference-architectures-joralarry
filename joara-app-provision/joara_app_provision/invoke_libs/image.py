@@ -100,6 +100,11 @@ class Image(object):
                 self.logger.error(logs)
                 raise RuntimeError(logs)
 
+        if not self.attributes['image']:
+            self.logger.error("Image name {} is not a valid".format(self.attributes['image']))
+            sys.exit(1)
+
+
         if self.task == "build" or self.task == "push" :
             run("az login -u {} -p {} --tenant {} --service-principal".format(os.environ['AZURE_CLIENT_ID'], os.environ['AZURE_CLIENT_SECRET'],
                  os.environ['AZURE_TENANT_ID']))
@@ -256,13 +261,33 @@ class Image(object):
 
             if registry.admin_user_enabled:
                 cred = registries.list_credentials(resource_group, registry_name)
-                response = self._obtain_data_from_registry("{}.azurecr.io".format(registry_name),"/v2/{}/tags/list".format(repository),cred.username,cred.passwords[0].value)
+                try:
+                    response = self._obtain_data_from_registry("{}.azurecr.io".format(registry_name),
+                                                               "/v2/_catalog", cred.username,
+                                                               cred.passwords[0].value)
+                    repositories_list = response["repositories"]
+                    if not "{}".format(repository) in repositories_list:
+                        self.logger.error("Requested image: {} not exist in the registry: {}".format(repository,"{}.azurecr.io".format(registry_name)))
+                        if self.task == "build" or self.task == "push":
+                            return None
+                        else:
+                            sys.exit(1)
+                    else:
+                        self.logger.info("Requested image: {} exist in the registry: {}".format(repository,
+                                                                                                "{}.azurecr.io".format(
+                                                                                                    registry_name)))
+                        response= self._obtain_data_from_registry("{}.azurecr.io".format(registry_name),
+                                                                   "/v2/{}/tags/list".format(repository), cred.username,
+                                                                   cred.passwords[0].value)
+                        response= response["tags"]
+                        self.logger.info("ACR Image versions:{}".format(response))
+                except Exception as err:
+                    self.logger.error("Error getting image details from repo: {0}.".format(err))
             else:
                 self.logger.error("ACR Not enable with admin access, please enable it")
-
             return response
         except Exception as err:
-            self.logger.error("Error getting image detail from repo: {0}.".format(err))
+            self.logger.error("Error getting image version details from repo: {0}.".format(err))
             return None
         return response
 
@@ -280,7 +305,6 @@ class Image(object):
                                    username,
                                    password):
         try:
-
             registryEndpoint = 'https://' + login_server
             self.logger.info("Connecting to ACR: {}".format(registryEndpoint + path))
             response = requests.get(
@@ -289,8 +313,7 @@ class Image(object):
             )
 
             if response.status_code == 200:
-                result = response.json()["tags"]
-                self.logger.info("ACR Image versions:{}".format(result))
+                result = response.json()
                 return result
             else:
                 self.logger.exception("Error getting image detail from acr")
@@ -309,8 +332,9 @@ class Image(object):
     def _get_local_next_version(self, v):
         try:
 
-            base_url = "unix:/" + \
-                       self.attributes['cluster_config']['DOCKER_SOCK']
+            base_url= "unix:///var/run/docker.sock"
+            # base_url = "unix:/" + \
+            #            self.attributes['cluster_config']['DOCKER_SOCK']
 
             client = Client(base_url=base_url)
             images = client.images()

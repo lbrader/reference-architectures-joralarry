@@ -25,7 +25,7 @@ class KubeApi(object):
         self.datacenter = datacenter
 
         self.image = kwargs['image']
-        user = kwargs["cluster_config"]["APP_DATACENTER"]
+        self.name = kwargs['name']
 
         try:
             config.load_kube_config()
@@ -36,16 +36,25 @@ class KubeApi(object):
             self.logger.error("Error loading Kube config, Exception: {} ".format(err))
             sys.exit(1)
 
-
-        img = Image(deploy=True, **kwargs)
-        self.version = img.current_version()
+        if 'type' in kwargs and kwargs['type'] == "backend":
+            self.logger.info("Deploying backend {}".format(self.name))
+            self.version = kwargs['version']
+            user = kwargs["user"]
+        else:
+            img = Image(deploy=True, **kwargs)
+            self.version = img.current_version()
+            user = kwargs["cluster_config"]["APP_DATACENTER"]
 
         attributes = {
             "datacenter": self.datacenter,
             "version": self.version,
             "user": user,
+            "env": {},
+            "cpu": "250m",
+            "limitscpu": "500m",
+            "lbport": kwargs['port'] if 'type' in kwargs and kwargs['type'] == "backend" else 80,
             "replicas": kwargs['count'] if int(kwargs['count']) > 1 else self._getreplica(),
-            "name": self.image,
+            "name": self.name,
             "registry": kwargs["app_docker_registry"],
             "deploy_app": deployment_app,
             "service_app": service_app
@@ -63,23 +72,24 @@ class KubeApi(object):
         try:
             resp = self.k8s_beta.list_namespaced_replica_set(namespace="default")
             for i in resp.items:
-                if i.metadata.labels["name"] == self.image:
+                if "app" in i.metadata.labels and i.metadata.labels["app"] == self.name:
                     count = int(i.spec.replicas)
+                    self.logger.info("Current replica for image:{image} is {count}".format(image=self.name,count=count))
                     if count > 0:
                         self.logger.info("Deployment already running in datacenter")
                         self.logger.debug("Deployment: {image} already running in datacenter {datacenter} with replica {count} deployed".format(
-                            image=self.image, datacenter=self.datacenter, count=count))
+                            image=self.name, datacenter=self.datacenter, count=count))
                         return count
             return count
         except Exception as err:
-            self.logger.error("Error getting replica details: {}. ".format(err))
+            self.logger.exception("Error getting replica details: {}. ".format(err))
             return count
 
     def _get_running_imageversion(self):
         try:
             resp = self.k8s_beta.list_namespaced_deployment(namespace="default")
             for i in resp.items:
-                if i.metadata.name == self.image:
+                if i.metadata.name == self.name:
                     deployedimage = i.spec.template.spec.containers[0].image
                     xs = deployedimage.split(':')
                     xs = list(self.flatmap(lambda ys: ys.split('/'), xs))
@@ -87,7 +97,7 @@ class KubeApi(object):
                     image = xs.pop()
                     self.logger.info("Deployment already running in datacenter")
                     self.logger.debug("Deployment: {image} already running in datacenter {datacenter} with image name {deployedimage} deployed".format(
-                            image=self.image, datacenter=self.datacenter, deployedimage=deployedimage))
+                            image=self.name, datacenter=self.datacenter, deployedimage=deployedimage))
                     return tag
             return "Not Found"
         except Exception as err:
@@ -97,32 +107,33 @@ class KubeApi(object):
     def deploy(self):
         try:
              dep = yaml.load(self.deploy_app)
+             self.logger.debug(dep)
              if not self._is_deployment_deployed():
                  resp = self.k8s_beta.create_namespaced_deployment(
                      body=dep, namespace="default")
-                 self.logger.info("Deployment created.Image:{image}".format(image=self.image))
+                 self.logger.info("Deployment created.Image:{image}".format(image=self.name))
                  self.logger.debug("Deployment created. status='{}' ".format(resp.status))
              else:
-                 self.logger.info("Deployment {} already exist, so it will patch ".format(self.image))
+                 self.logger.info("Deployment {} already exist, so it will patch ".format(self.name))
                  run_version=self._get_running_imageversion()
                  run_replica = int(self._getreplica())
-                 self.logger.debug("Deployment compare {run_version}={version} ,{run_replica}={replicas} ".format(run_version=run_version.strip(), version=self.version.strip(), run_replica=run_replica,replicas=self.replicas))
-                 if not "Not Found" in run_version and ( run_version.strip() != self.version.strip() or  run_replica != self.replicas):
+                 self.logger.debug("Deployment compare {run_version}={version} ,{run_replica}={replicas} ".format(run_version=str(run_version).strip(), version=str(self.version).strip(), run_replica=run_replica,replicas=self.replicas))
+                 if not "Not Found" in run_version and ( str(run_version).strip() != str(self.version).strip() or  run_replica != self.replicas):
                     self.patch()
                  else:
-                     self.logger.info("Deployment {} already exist, with same schema, so patch skipped ".format(self.image))
+                     self.logger.info("Deployment {} already exist, with same schema, so patch skipped ".format(self.name))
 
              if not self._is_service_deployed():
                  srv = yaml.load(self.service_app)
-
+                 self.logger.debug(srv)
                  resp = self.api.create_namespaced_service(body=srv,
                                                       namespace="default")
                  self.logger.info("Service created")
                  self.logger.debug("Service created. status='{}' ".format(resp.status))
              else:
-                 self.logger.info("Service {} already exist ".format(self.image))
+                 self.logger.info("Service {} already exist ".format(self.name))
         except Exception as err:
-            self.logger.error("Error deployment details: {}. ".format(err))
+            self.logger.exception("Error deployment details: {}. ".format(err))
             sys.exit(1)
 
     def scale(self):
@@ -130,11 +141,11 @@ class KubeApi(object):
              dep = yaml.load(self.deploy_app)
 
              if self._is_deployment_deployed():
-                 resp=self.k8s_beta.patch_namespaced_deployment_scale(name=self.image, body=dep, namespace="default")
+                 resp=self.k8s_beta.patch_namespaced_deployment_scale(name=self.name, body=dep, namespace="default")
                  self.logger.info("Scale Deployment created.")
                  self.logger.debug("Scale Deployment created. status='{}' ".format(resp.status))
              else:
-                 self.logger.info("Deployment {} not exist ".format(self.image))
+                 self.logger.info("Deployment {} not exist ".format(self.name))
         except Exception as err:
             self.logger.error("Error scale details: {}. ".format(err))
             sys.exit(1)
@@ -143,17 +154,18 @@ class KubeApi(object):
         try:
              if self._is_deployment_deployed():
                  resp=self.k8s_beta.delete_collection_namespaced_deployment(namespace="default")
+                 #resp = self.k8s_beta.delete_namespaced_deployment(name=self.name,namespace="default")
                  self.logger.info("Delete Deployment created. ")
                  self.logger.debug("Delete Deployment created. status='{}' ".format(resp.status))
              else:
-                 self.logger.info("Deployment {} not exist ".format(self.image))
+                 self.logger.info("Deployment {} not exist ".format(self.name))
 
              if self._is_service_deployed():
-                 resp = self.api.delete_namespaced_service(name=self.image,namespace="default")
+                 resp = self.api.delete_namespaced_service(name=self.name,namespace="default")
                  self.logger.info("Delete Service created.")
                  self.logger.debug("Delete Service created. status='{}' ".format(resp.status))
              else:
-                 self.logger.info("Service {} not exist ".format(self.image))
+                 self.logger.info("Service {} not exist ".format(self.name))
         except Exception as err:
             self.logger.error("Error delete details: {}. ".format(err))
             sys.exit(1)
@@ -163,11 +175,11 @@ class KubeApi(object):
         try:
              dep = yaml.load(self.deploy_app)
              if self._is_deployment_deployed():
-                 resp=self.k8s_beta.patch_namespaced_deployment(name=self.image, body=dep, namespace="default")
+                 resp=self.k8s_beta.patch_namespaced_deployment(name=self.name, body=dep, namespace="default")
                  self.logger.info("Patch Deployment created.")
                  self.logger.debug("Patch Deployment created. status='{}' ".format(resp.status))
              else:
-                 self.logger.info("Deployment {} not exist, Please deploy first ".format(self.image))
+                 self.logger.info("Deployment {} not exist, Please deploy first ".format(self.name))
         except Exception as err:
             self.logger.error("Error patching deployment details: {}. ".format(err))
             return False
@@ -176,8 +188,8 @@ class KubeApi(object):
         try:
             resp = self.k8s_beta.list_namespaced_deployment(namespace="default")
             for i in resp.items:
-                if i.metadata.name == self.image:
-                    self.logger.info("Deployment: {deployment} deployed".format(deployment=self.image))
+                if i.metadata.name == self.name:
+                    self.logger.info("Deployment: {deployment} deployed".format(deployment=self.name))
                     return True
             return False
         except Exception as err:
@@ -188,11 +200,11 @@ class KubeApi(object):
         try:
             resp = self.k8s_beta.list_namespaced_deployment(namespace="default")
             for i in resp.items:
-                if i.metadata.name == self.image:
+                if i.metadata.name == self.name:
                     self.logger.info("Deployment Details: {deployment}".format(deployment=i))
                     return True
 
-                self.logger.info("Deployment Details: {image} doesn't exist".format(image=self.image))
+                self.logger.info("Deployment Details: {image} doesn't exist".format(image=self.name))
             return False
         except Exception as err:
             self.logger.error("Error getting deployment details: {}. ".format(err))
@@ -203,10 +215,11 @@ class KubeApi(object):
             resp = self.api.list_namespaced_service(namespace="default")
             self.logger.debug("Service details. status='{}' ".format(resp))
             for i in resp.items:
-                if i.metadata.name == self.image:
-                    self.logger.info("Service: {service} running @ip: {ip}".format(service=self.image,ip=i.status.load_balancer.ingress[0].ip))
-                    self.logger.warning("Service: {service} running @ip: {ip}".format(service=self.image, ip=i.status.load_balancer.ingress[0].ip))
+                if i.metadata.name == self.name:
+                    self.logger.info("Service: {service} running @ip: {ip}, @port: {port}".format(service=self.name,ip=i.status.load_balancer.ingress[0].ip,port=i.spec.ports[0].target_port))
+                    self.logger.warning("Service: {service} running @ip: {ip}, @port: {port}".format(service=self.name,ip=i.status.load_balancer.ingress[0].ip,port=i.spec.ports[0].target_port))
                     return True
+            self.logger.info("No Service details found for image {}, may be the service not deployed ".format(self.name))
             return False
         except Exception as err:
             self.logger.error("Error getting service details: {}. ".format(err))
@@ -220,8 +233,8 @@ class KubeApi(object):
             resp = self.api.list_namespaced_service(namespace="default")
             self.logger.debug("Service details. status='{}' ".format(resp))
             for i in resp.items:
-                if i.metadata.name == self.image:
-                    self.logger.info("Service: {service} running @ip: {ip}".format(service=self.image,ip=i.status.load_balancer.ingress[0].ip))
+                if i.metadata.name == self.name:
+                    self.logger.info("Service: {service} running @ip: {ip}".format(service=self.name,ip=i.status.load_balancer.ingress[0].ip))
                     return True
             return False
         except Exception as err:
@@ -229,35 +242,67 @@ class KubeApi(object):
             return False
 
 
-deployment_app = """
+deployment_app_old = """
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: {{ image }}
+  name: {{ name }}
 spec:
   replicas: {{ replicas }}
   template:
     metadata:
       labels:
-        name: {{ image }}
+        name: {{ name }}
     spec:
       containers:
       - image: {{ registry }}/{{ user }}/{{ image }}:{{ version }}
-        name: {{ image }}
+        name: {{ name }}
         imagePullPolicy: Always
         ports:
         - containerPort: {{ port }}
           name: http-server
-          
+        env:
+          {{ env }}
 """.strip()
 
-service_app = """
+deployment_app= """
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ name }}
+spec:
+  replicas: {{ replicas }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 5 
+  template:
+    metadata:
+      labels:
+        app: {{ name }}
+    spec:
+      containers:
+      - name: {{ name }}
+        image: {{ registry }}/{{ user }}/{{ image }}:{{ version }}
+        ports:
+        - containerPort: {{ port }}
+        resources:
+          requests:
+            cpu: {{ cpu }}
+          limits:
+            cpu: {{ limitscpu }}
+        env:
+          {{ env }}
+""".strip()
+
+service_app_old = """
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ image }}
+  name: {{ name }}
   labels:
-    name: {{ image }}
+    name: {{ name }}
 spec:
   type: LoadBalancer
   ports:
@@ -265,6 +310,20 @@ spec:
       targetPort: {{ port }}
       protocol: TCP
   selector:
-    name: {{ image }}
+    name: {{ name }}
     
+""".strip()
+
+service_app = """
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ name }}
+spec:
+  type: LoadBalancer
+  ports:
+  - port: {{ lbport }}
+    targetPort: {{ port }}
+  selector:
+    app: {{ name }}
 """.strip()

@@ -4,6 +4,8 @@ from ..python_libs.context import Context
 from ..python_libs.utils import find_app_main
 import os
 import shutil
+from pathlib import Path
+import yaml
 from ..log import logging
 import sys
 
@@ -16,11 +18,39 @@ def provision_images(module, images,  args):
     for image in images:
         if args.task in ["build", "push", "deploy", "all"]:
             context.copy_sub_project(image)
-        attributes = {
-            "count": args.count,
-            "image": image
-        }
-        context.image_action(attributes,args,)
+
+        if args.task in ["deploy"]:
+            backend = Path("backend.yml")
+            if backend.is_file():
+                with open("backend.yml", 'r') as f:
+                    backend = yaml.load(f)
+                attributes = {}
+                attributes.update(backend)
+                context.image_action(attributes, args)
+
+        if args.task in ["build", "push", "deploy", "all"]:
+            conf = Path("conf.yml")
+            if conf.is_file():
+                with open("conf.yml", 'r') as f:
+                    conf = yaml.load(f)
+                attributes = {
+                    "count": args.count,
+                    "image": image,
+                    "name": conf['name'] if 'name' in conf else image,
+                    "env": {}
+                }
+                attributes.update(conf)
+                context.image_action(attributes, args)
+
+        if not args.task in ["build", "push", "deploy", "all"]:
+            attributes = {
+                "count": args.count,
+                "image": image,
+                "name": image #conf['name'] if conf and 'name' in conf else image
+            }
+            context.image_action(attributes, args)
+
+
 
 
 

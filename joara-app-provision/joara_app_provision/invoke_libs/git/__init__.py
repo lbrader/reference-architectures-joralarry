@@ -23,6 +23,7 @@ class GitHubApi(object):
         self.username = kwargs['cluster_config']['GIT_HUB_USER_NAME']
         self.jenkinshost = kwargs['jenkins_host']
         self.image = kwargs['image']
+        self.repo = kwargs['repo']
         self.attributes = {
             "jenkins_hook_url": "http://{host}/github-webhook/".format(host=self.jenkinshost),
             "webhook_hook": webhook_hook,
@@ -32,9 +33,11 @@ class GitHubApi(object):
         self.attrs = {}
         self.attrs['git_main_repo_name'] = kwargs['cluster_config']['MASTER_APP_NAME']
         self.attrs['git_org_id'] = kwargs['cluster_config']['GIT_HUB_ORG_ID']
-        self.attrs['jenkins_github_credential'] = kwargs['cluster_config']['JENKINS_GITHUB_CREDENTIALS_NAME']
-        self.attrs['jenkins_azure_credential'] = kwargs['cluster_config']['JENKINS_AZURE_CREDENTIALS_NAME']
-        self.attrs['git_repo_name'] = self.image
+        self.attrs['jenkins_github_credential'] = kwargs['cluster_config']['JENKINS_GITHUB_CREDENTIALS_ID']
+        self.attrs['jenkins_azure_credential'] = kwargs['cluster_config']['JENKINS_AZURE_CREDENTIALS_ID']
+        self.attrs['notification_email'] = kwargs['cluster_config']['JENKINS_NOTIFICATION_EMAIL']
+        self.attrs['git_repo_name'] = self.repo
+
 
         #print(self.attrs)
         self.app_render()
@@ -44,7 +47,7 @@ class GitHubApi(object):
         self.github = Github(self.token)
 
     def app_render(self):
-        list_files = ['Jenkinsfile']
+        list_files = ['Jenkinsfile','conf.yml','backend.yml']
         for files in list_files:
             self.app_render_template(self.find(files), files)
 
@@ -65,6 +68,8 @@ class GitHubApi(object):
                 return os.path.join(root)
 
     def create_repo(self,name, dir=""):
+      try:
+
         repo_exist = False
         repo_detail = ""
 
@@ -73,7 +78,7 @@ class GitHubApi(object):
                 repo_exist = True
                 repo_detail = gitrepo
         if not repo_exist:
-            repogit = self.github.get_organization( self.orgid).create_repo(name)
+            repogit = self.github.get_organization( self.orgid).create_repo(name,private=True)
             time.sleep(60)
             repo_exist = True
             repo_detail = repogit
@@ -89,8 +94,9 @@ class GitHubApi(object):
             if branch in branches_list:
                 count = count + 1
 
-        self.logger.info("No of branches:{}".format(count))
+        self.logger.info("No of branches found:{}".format(count))
         if repo_exist and repo_detail and count < 3:
+            self.logger.info("Creating Git Repository {}".format(name))
             os.chdir(dir)
             repo = Repo.init(".")
             repo = Repo(".")
@@ -119,8 +125,13 @@ class GitHubApi(object):
                 self.logger.error("Github exception:".format(err))
                 pass
             repo.git.push("origin", "test", force=True)
+            self.logger.info("Repository {} created successfully".format(name))
         else:
-            self.logger.info("Repository pre-condition already met")
+            self.logger.info("Repository {} pre-condition already met".format(name))
+      except Exception as err:
+            self.logger.exception("Exception: {0}".format(err))
+            sys.exit(1)
+
 
 
     def delete_repo(self, name):

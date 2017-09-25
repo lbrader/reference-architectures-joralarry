@@ -24,6 +24,14 @@ def git_add_subcommand(parser):
     )
 
     subcommand.add_argument(
+        '--repo',
+        required=True,
+        nargs="?",
+        type=str,
+        help="What is the repo name"
+    )
+
+    subcommand.add_argument(
         '--task',
         type=str,
         required=True,

@@ -1,2 +1,2 @@
-image: anodejs
+image: {{ git_repo_name }}
 port: 3000

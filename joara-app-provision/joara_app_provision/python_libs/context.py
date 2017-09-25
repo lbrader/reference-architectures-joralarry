@@ -355,32 +355,30 @@ class Context(object):
        jenkins_host= "{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.location)
        self.__dict__.update({
            'jenkins_host': jenkins_host,
-           'image': args.image})
+           'image': args.image,
+           'repo': args.repo})
 
        git = GitHubApi( **self.__dict__)
        if args.task == "repo":
-            git.create_repo(args.image,os.getcwd())
+            git.create_repo(args.repo,os.getcwd())
        elif args.task == "deleterepo":
-           git.delete_repo(args.image)
+           git.delete_repo(args.repo)
        elif args.task == "orghook":
            git.create_org_hook()
        elif args.task == "repohook":
-           git.create_repo_hook(args.image)
+           git.create_repo_hook(args.repo)
        elif args.task == "protect":
-           git.set_protection(args.image)
+           git.set_protection(args.repo)
        elif args.task == "all":
-           git.create_repo(args.image, os.getcwd())
-           git.create_repo_hook(args.image)
+           git.create_repo(args.repo, os.getcwd())
+           git.create_repo_hook(args.repo)
            #git.set_protection(args.image)
 
     def image_action(self, config_dict, args):
         attrs = {}
-        if args.task in ["build", "push", "deploy", "all"]:
-            with open("conf.yml", 'r') as f:
-                conf = yaml.load(f)
-            attrs.update(conf)
-            attrs['flatten'] = False
-            attrs['move'] = True
+        # if args.task in ["build", "push", "deploy", "all"]:
+        #     attrs['flatten'] = False
+        #     attrs['move'] = True
 
         attrs['task'] = args.task
         cluster_config = get_cluster_config(self.datacenter)
