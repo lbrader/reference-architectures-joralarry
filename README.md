@@ -228,11 +228,11 @@ The following steps clone the GitHub repository for this reference architecture 
 
 6.  To create the application repository in the user account:
 ```
-   joara gitconfigure --group git --image anodejs --task all –verbose
+   joara gitconfigure --group git --image azure-vote --repo azure-vote  --task repo --verbose
 ```
 7.  To create a webhook for the repo:
 ```
-   joara gitconfigure --group git --image anodejs --task repohook --verbose
+   joara gitconfigure --group git --image azure-vote --repo azure-vote --task repohook --verbose
 ```
 
 2. Provision Azure and bootstrap the Jenkins server
