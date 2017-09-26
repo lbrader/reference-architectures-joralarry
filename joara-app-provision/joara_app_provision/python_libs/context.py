@@ -25,6 +25,8 @@ from ..invoke_libs.sync.copy_docker import CopyDocker
 from ..invoke_libs.validators import validate_ssh_key
 import tempfile
 import shutil
+from requests import post, put, get
+import adal
 import re
 
 class Context(object):
@@ -235,6 +237,50 @@ class Context(object):
         except Exception as err:
             self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
+
+    def configure_alerting(self):
+       try:
+        self.logger.info("Configuring Azure monitoring alerting for jenkins instance")
+        for resource in self.client.resources.list():
+            resourcename= "{}commonjenkins".format(self.resource_group_prefix)
+            if resource.type == 'Microsoft.Compute/virtualMachines' and resource.name == resourcename:
+                self.logger.info("Found jenkins instance {}".format(resource.name))
+                attributes = {
+                    "location": self.location,
+                    "resourceid": resource.id,
+                    "notification_email": self.cluster_config['NOTIFICATION_EMAIL']
+                }
+                attributes_rule = {
+                     "cpuhigh" : cpu_high,
+                     "cpulow": cpu_low
+                }
+                context = adal.AuthenticationContext('https://login.microsoftonline.com/' + self.tenant_id)
+                token_response = context.acquire_token_with_client_credentials('https://management.core.windows.net/',
+                                                                               self.client_id, self.client_secret)
+                access_token = token_response.get('accessToken')
+
+                headers = {
+                    "Authorization": 'Bearer ' + access_token,
+                    "Content-Type": 'application/json'
+                }
+
+                rules = ["cpuhigh","cpulow"]
+                for rule in rules:
+                    uri = "https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group_prefix}-jenkins/providers/microsoft.insights/alertRules/{rule}?api-version=2014-04-01".format(subscription_id=self.subscription_id,resource_group_prefix=self.resource_group_prefix,rule=rule)
+                    self.logger.debug(uri)
+                    json_data = render(attributes_rule[rule], attributes)
+                    self.logger.debug(json_data)
+                    response = put(uri, json=json.loads(json_data), headers=headers)
+                    if response.status_code == 201 or response.status_code == 200:
+                        response.raise_for_status()
+                        self.logger.info("Azure monitor alert rule creation success")
+                    else:
+                        self.logger.error("Azure monitor alert rule creation failed")
+                        self.logger.error(response.status_code,response.json())
+
+                    self.logger.debug(response.json())
+       except Exception as err:
+          self.logger.error("Exception: Error in creating azure monitor alerting, {0}".format(err))
 
     def deploy(self, config_dict):
         """Deploy the template to a resource group."""
@@ -467,3 +513,63 @@ class Context(object):
         if os.path.exists(to_path):
             shutil.rmtree(to_path, ignore_errors=True)
         shutil.copytree(from_path, to_path)
+
+
+
+cpu_high="""{
+  "location": "{{ location }}",
+  "tags": { },
+  "properties": {
+    "name": "CPUHigh Plan",
+    "description": "The CPU is high across the Jenkins instances of Plan",
+    "isEnabled": true,
+    "condition": {
+      "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+      "dataSource": {
+        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+        "resourceUri": "{{ resourceid }}",
+        "metricName": "Percentage CPU"
+        
+      },
+      "operator": "GreaterThan",
+      "threshold": 75,
+      "windowSize": "PT5M"
+    },
+    "actions": [
+      {
+        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+        "sendToServiceOwners": true,
+        "customEmails": ["{{ notification_email }}"]
+      }
+    ]
+  }
+}""".strip()
+
+
+cpu_low="""{
+  "location": "{{ location }}",
+  "tags": { },
+  "properties": {
+    "name": "CPULow Plan",
+    "description": "The CPU is Low across the Jenkins instances of Plan",
+    "isEnabled": true,
+    "condition": {
+      "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+      "dataSource": {
+        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+        "resourceUri": "{{ resourceid }}",
+        "metricName": "Percentage CPU"
+      },
+      "operator": "LessThanOrEqual",
+      "threshold": 0,
+      "windowSize": "PT5M"
+    },
+    "actions": [
+      {
+        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+        "sendToServiceOwners": true,
+        "customEmails": ["{{ notification_email }}"]
+      }
+    ]
+  }
+}""".strip()

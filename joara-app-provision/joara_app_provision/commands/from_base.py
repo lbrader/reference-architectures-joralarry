@@ -106,6 +106,17 @@ def configure_jenkins(args):
     context.copy_project()
     context.configure_jenkins()
 
+def configure_monitor(args):
+    app_main = find_app_main()
+    moudle_path = os.path.join(app_main, 'infrastructure', 'configure','jenkins','run')
+    context = Context(
+        file=moudle_path,
+        datacenter=args.datacenter,
+        group=args.group
+    )
+
+    context.configure_alerting()
+
 def configure_git(args):
     app_main = find_app_main()
     if 'git' in args.group:

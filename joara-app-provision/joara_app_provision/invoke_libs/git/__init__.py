@@ -35,7 +35,7 @@ class GitHubApi(object):
         self.attrs['git_org_id'] = kwargs['cluster_config']['GIT_HUB_ORG_ID']
         self.attrs['jenkins_github_credential'] = kwargs['cluster_config']['JENKINS_GITHUB_CREDENTIALS_ID']
         self.attrs['jenkins_azure_credential'] = kwargs['cluster_config']['JENKINS_AZURE_CREDENTIALS_ID']
-        self.attrs['notification_email'] = kwargs['cluster_config']['JENKINS_NOTIFICATION_EMAIL']
+        self.attrs['notification_email'] = kwargs['cluster_config']['NOTIFICATION_EMAIL']
         self.attrs['git_repo_name'] = self.repo
 
 
