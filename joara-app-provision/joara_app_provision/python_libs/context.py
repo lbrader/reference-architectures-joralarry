@@ -12,7 +12,7 @@ from azure.mgmt.resource.subscriptions.subscription_client import SubscriptionCl
 from azure.cli.core._profile import Profile
 from azure.mgmt.resource.resources.models import DeploymentMode
 from msrestazure.azure_exceptions import CloudError
-from ..invoke_libs import render
+from ..invoke_libs import render,resolvedns
 import json
 from . import remote
 import zipfile
@@ -232,8 +232,14 @@ class Context(object):
                 self.sshclient = remote.sshclient("{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,
                     location=self.location), "{}jenkins".format(self.resource_group_prefix))
                 self.logger.info("Getting Jenkins admin credentials ")
-                self.sshclient.sendCommand("sudo cat /var/lib/jenkins/secrets/initialAdminPassword")
-                self.logger.info("Please use the above credentials for configuring jenkins ")
+                log_output = self.sshclient.sendCommand("sudo cat /var/lib/jenkins/secrets/initialAdminPassword")
+                if not log_output:
+                    self.logger.error("Unable to find the credentials either you have already configured jenkins, if not re-run the command after 5 mins")
+                    sys.exit(1)
+                else:
+                    self.logger.warn("Jenkins credentials: {}".format(log_output))
+
+                self.logger.info("Please use the above credentials for configuring jenkins")
         except Exception as err:
             self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
@@ -248,11 +254,23 @@ class Context(object):
                 attributes = {
                     "location": self.location,
                     "resourceid": resource.id,
-                    "notification_email": self.cluster_config['NOTIFICATION_EMAIL']
+                    "notification_email": self.cluster_config['NOTIFICATION_EMAIL'],
+                    "lowthreshold": self.cluster_config['AZURE_MONITOR_CPU_LOWER_THRESHOLD'],
+                    "higherthreshold": self.cluster_config['AZURE_MONITOR_CPU_UPPER_THRESHOLD']
                 }
+
+                if not attributes["lowthreshold"].isdigit():
+                    self.logger.error("AZURE_MONITOR_CPU_UPPER_THRESHOLD value in clusters.ini is not an integer")
+                    sys.exit(1)
+
+                if not attributes["higherthreshold"].isdigit():
+                    self.logger.error("AZURE_MONITOR_CPU_UPPER_THRESHOLD value in clusters.ini is not an integer")
+                    sys.exit(1)
+
                 attributes_rule = {
                      "cpuhigh" : cpu_high,
-                     "cpulow": cpu_low
+                     "cpulow": cpu_low,
+                     "cpuzero": cpu_zero
                 }
                 context = adal.AuthenticationContext('https://login.microsoftonline.com/' + self.tenant_id)
                 token_response = context.acquire_token_with_client_credentials('https://management.core.windows.net/',
@@ -264,7 +282,7 @@ class Context(object):
                     "Content-Type": 'application/json'
                 }
 
-                rules = ["cpuhigh","cpulow"]
+                rules = ["cpuhigh","cpulow","cpuzero"]
                 for rule in rules:
                     uri = "https://management.azure.com/subscriptions/{subscription_id}/resourceGroups/{resource_group_prefix}-jenkins/providers/microsoft.insights/alertRules/{rule}?api-version=2014-04-01".format(subscription_id=self.subscription_id,resource_group_prefix=self.resource_group_prefix,rule=rule)
                     self.logger.debug(uri)
@@ -273,20 +291,73 @@ class Context(object):
                     response = put(uri, json=json.loads(json_data), headers=headers)
                     if response.status_code == 201 or response.status_code == 200:
                         response.raise_for_status()
-                        self.logger.info("Azure monitor alert rule creation success")
+                        self.logger.info("Azure monitor alert rule creation success for {}".format(rule))
                     else:
-                        self.logger.error("Azure monitor alert rule creation failed")
+                        self.logger.error("Azure monitor alert rule creation failed for {}".format(rule))
                         self.logger.error(response.status_code,response.json())
 
                     self.logger.debug(response.json())
        except Exception as err:
           self.logger.error("Exception: Error in creating azure monitor alerting, {0}".format(err))
 
+    def validatedns(self):
+        registry_name="{resourcegroup}acr{datacenter}".format(resourcegroup=self.resource_group_prefix,datacenter=self.datacenter)
+        acr_dns = "{}.azurecr.io".format(registry_name)
+        acs_dns = "{resourcegroup}-acs-mgmt-{datacenter}.{location}.cloudapp.azure.com".format(
+            resourcegroup=self.resource_group_prefix, location=self.location,
+            datacenter=self.datacenter)
+        jenkins_dns = "{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.location)
+
+
+        dns_kube_list = {
+            "acr":acr_dns,
+            "acs":acs_dns
+        }
+
+        dns_jenkins_list = {
+            "jenkins": jenkins_dns
+        }
+        dns_list = {
+            "dev": dns_kube_list,
+            "test": dns_kube_list,
+            "prod": dns_kube_list,
+            "jenkins": dns_jenkins_list,
+        }
+        self.logger.info("Starting the pre-validate resource group check: {0.app_datacenter} ... ".format(self))
+        resource_group_exist = False
+        for item in self.client.resource_groups.list():
+            if self.resource_group == item.name:
+                resource_group_exist = True
+
+        if not resource_group_exist:
+            self.logger.info("Resource group {0.resource_group} not found under your subscription: {0.app_datacenter} ... ".format(self))
+        else:
+            self.logger.warn("Resource group {0.resource_group} found under your subscription: {0.app_datacenter} ... ".format(self))
+
+        self.logger.info("Starting the pre-validate DNS check: {0.app_datacenter} ... ".format(self))
+
+        for key, value in dns_list[self.datacenter].items():
+           if not resource_group_exist and resolvedns(value):
+               self.logger.error("DNS check failed for {}. Already the DNS is in use, Please specifiy a different resource group name in clusters.ini ".format(key))
+               return False
+           elif resource_group_exist and resolvedns(value):
+               self.logger.warn("DNS check passed for {}. Already the DNS is in use in your subscription ".format(key))
+           elif not resource_group_exist and not resolvedns(value):
+               self.logger.info("DNS check passed for {}.".format(key))
+           else:
+               self.logger.info("DNS check passed for {} ".format(key))
+
+
+
+        self.logger.info("All DNS check passed")
+        return True
+
     def deploy(self, config_dict):
         """Deploy the template to a resource group."""
 
         # Dict that maps keys of CloudCenter's region names to values of Azure's region names.
         # Used below to control where something is deployed
+
         self.logger.info("Starting the deployment: {0.app_datacenter} ... ".format(self))
 
         try:
@@ -355,7 +426,7 @@ class Context(object):
             msg = "Deployment completed. Outputs:"
             for k, v in result.properties.outputs.items():
                 msg += f"\n- {k} = {str(v['value'])}"
-            self.logger.info(msg)
+            self.logger.warn(msg)
         except CloudError as err:
             self.logger.error("CloudError: {0}".format(err))
             sys.exit(1)
@@ -532,7 +603,7 @@ cpu_high="""{
         
       },
       "operator": "GreaterThan",
-      "threshold": 75,
+      "threshold": {{ higherthreshold }},
       "windowSize": "PT5M"
     },
     "actions": [
@@ -545,6 +616,34 @@ cpu_high="""{
   }
 }""".strip()
 
+
+cpu_zero="""{
+  "location": "{{ location }}",
+  "tags": { },
+  "properties": {
+    "name": "CPULow Plan",
+    "description": "The CPU is Low across the Jenkins instances of Plan",
+    "isEnabled": true,
+    "condition": {
+      "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+      "dataSource": {
+        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+        "resourceUri": "{{ resourceid }}",
+        "metricName": "Percentage CPU"
+      },
+      "operator": "LessThanOrEqual",
+      "threshold": 0,
+      "windowSize": "PT5M"
+    },
+    "actions": [
+      {
+        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+        "sendToServiceOwners": true,
+        "customEmails": ["{{ notification_email }}"]
+      }
+    ]
+  }
+}""".strip()
 
 cpu_low="""{
   "location": "{{ location }}",
@@ -561,7 +660,7 @@ cpu_low="""{
         "metricName": "Percentage CPU"
       },
       "operator": "LessThanOrEqual",
-      "threshold": 0,
+      "threshold": {{ lowthreshold }},
       "windowSize": "PT5M"
     },
     "actions": [

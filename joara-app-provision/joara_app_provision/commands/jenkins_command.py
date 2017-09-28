@@ -28,4 +28,4 @@ def jenkins_subcommand(args):
         from_base.configure_jenkins(args)
     if 'monitor' in args.group:
         from_base.configure_monitor(args)
-   
+

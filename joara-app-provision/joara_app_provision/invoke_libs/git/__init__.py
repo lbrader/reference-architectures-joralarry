@@ -31,7 +31,7 @@ class GitHubApi(object):
         }
         self.attributes.update(kwargs)
         self.attrs = {}
-        self.attrs['git_main_repo_name'] = kwargs['cluster_config']['MASTER_APP_NAME']
+        self.attrs['git_main_repo_name'] = kwargs['cluster_config']['REPOSITORY_NAME']
         self.attrs['git_org_id'] = kwargs['cluster_config']['GIT_HUB_ORG_ID']
         self.attrs['jenkins_github_credential'] = kwargs['cluster_config']['JENKINS_GITHUB_CREDENTIALS_ID']
         self.attrs['jenkins_azure_credential'] = kwargs['cluster_config']['JENKINS_AZURE_CREDENTIALS_ID']
