@@ -26,6 +26,7 @@ from ..invoke_libs.validators import validate_ssh_key
 import tempfile
 import shutil
 from requests import post, put, get
+from jinja2 import Environment, FileSystemLoader
 import adal
 import re
 
@@ -206,9 +207,51 @@ class Context(object):
                 self.sshclient = remote.sshclient("{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,
                     location=self.location), "{}jenkins".format(self.resource_group_prefix))
 
-                self.sshclient.zip(
-                    os.path.join(self.app_main, "infrastructure", "configure", "jenkins", "ansible-jenkins"),
-                    "ansible-jenkins")
+                self.attrs = {}
+                ## Git configuration
+                self.attrs['github_credentials_id'] = self.cluster_config['JENKINS_GITHUB_CREDENTIALS_ID']
+                self.attrs['github_username'] = self.cluster_config['GIT_HUB_USER_NAME']
+                self.attrs['github_token'] = self.cluster_config['GIT_HUB_TOKEN']
+                self.attrs['git_org_id'] = self.cluster_config['GIT_HUB_ORG_ID']
+
+                self.regionmap = {
+                    "westcentralus": "West Central US",
+                    "eastus": "East US"
+                }
+
+                ## Azure configuration
+                self.attrs['azure_credentials_id'] = self.cluster_config['JENKINS_AZURE_CREDENTIALS_ID']
+                self.attrs['subscriptionId'] = self.subscription_id
+                self.attrs['clientId'] = self.client_id
+                self.attrs['clientSecret'] = self.client_secret
+                self.attrs['tenant'] = self.tenant_id
+                self.attrs['location'] = self.regionmap[self.location]
+
+                ## Jenkins VM slave
+                self.attrs['jenkins_vm_credentials_id'] = "jenkins_vm_credentials_id"
+                self.attrs['jenkins_vm_username'] = "jenkins"
+                self.attrs['jenkins_vm_password'] = "cmadmin123!"
+                self.attrs['jenkins_storage_account'] = "{}jenkinsslavest".format(self.resource_group_prefix)
+                self.attrs['resource_group'] = "{}-jenkins".format(self.resource_group_prefix)
+
+                ## Email Notification settings
+                self.attrs['default_suffix'] = self.cluster_config['EMAIL_DEFAULT_SUFFIX']
+                self.attrs['reply_to'] = self.cluster_config['EMAIL_REPLY_TO']
+                self.attrs['smtp_host'] = self.cluster_config['EMAIL_SMTP_HOST']
+                self.attrs['smtp_password'] = self.cluster_config['EMAIL_SMTP_PASSWORD']
+                self.attrs['smtp_port'] = self.cluster_config['EMAIL_SMTP_PORT']
+                self.attrs['smtp_user'] = self.cluster_config['EMAIL_SMTP_USER']
+
+                ## Jenkins Location
+                self.attrs['jenkins_admin_email'] = self.cluster_config['JENKINS_ADMIN_EMAIL']
+                self.attrs[
+                    'jenkins_main_url'] = "http://{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com:8080".format(
+                    resourcegroup=self.resource_group_prefix,
+                    location=self.location)
+
+                self.app_render()
+
+                self.sshclient.zip(os.path.join(os.getcwd(), "ansible-jenkins"),"ansible-jenkins")
 
                 self.sshclient.sendCommand("sudo rm -rf /tmp/*")
                 self.sshclient.sendCommand("ls -la /tmp/")
@@ -243,6 +286,28 @@ class Context(object):
         except Exception as err:
             self.logger.error("Exception: {0}".format(err))
             sys.exit(1)
+
+
+
+    def app_render(self):
+        list_files = ['all.yml']
+        for files in list_files:
+            self.app_render_template(self.find(files), files)
+
+
+    def app_render_template(self, path, file):
+        if path and os.path.exists(os.path.join(path, file)):
+            env = Environment(loader=FileSystemLoader(os.path.join(path)))
+            template = env.get_template(file)
+            output_from_parsed_template = template.render(self.attrs)
+            with open(os.path.join(path, file), "w") as fh:
+                fh.write(output_from_parsed_template)
+
+
+    def find(self, name):
+        for root, dirs, files in os.walk(os.getcwd()):
+            if name in files:
+                return os.path.join(root)
 
     def configure_alerting(self):
        try:
@@ -470,26 +535,36 @@ class Context(object):
 
     def configure_git(self, args):
        jenkins_host= "{resourcegroup}-release-jenkins.{location}.cloudapp.azure.com".format(resourcegroup=self.resource_group_prefix,location=self.location)
+
+       if args.repo == "" and 'GIT_HUB_APP_REPO_NAME' in self.cluster_config and  self.cluster_config['GIT_HUB_APP_REPO_NAME']:
+           repo_name=self.cluster_config['GIT_HUB_APP_REPO_NAME']
+       elif args.repo:
+           repo_name=args.repo
+       else:
+           self.logger.error("Git Hub repo name not specificied in the clusters.ini")
+           sys.exit(1)
+
        self.__dict__.update({
            'jenkins_host': jenkins_host,
            'image': args.image,
-           'repo': args.repo})
+           'repo': repo_name})
+
 
        git = GitHubApi( **self.__dict__)
        if args.task == "repo":
-            git.create_repo(args.repo,os.getcwd())
+            git.create_repo(repo_name,os.getcwd())
        elif args.task == "deleterepo":
-           git.delete_repo(args.repo)
+           git.delete_repo(repo_name)
        elif args.task == "orghook":
            git.create_org_hook()
        elif args.task == "repohook":
-           git.create_repo_hook(args.repo)
+           git.create_repo_hook(repo_name)
        elif args.task == "protect":
-           git.set_protection(args.repo)
+           git.set_protection(repo_name)
        elif args.task == "all":
-           git.create_repo(args.repo, os.getcwd())
-           git.create_repo_hook(args.repo)
-           #git.set_protection(args.image)
+           git.create_repo(repo_name, os.getcwd())
+           git.create_repo_hook(repo_name)
+           git.set_protection(args.image)
 
     def image_action(self, config_dict, args):
         attrs = {}
